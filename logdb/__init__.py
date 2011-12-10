@@ -157,3 +157,6 @@ class Database(object):
             length -= 1
             if not length:
                 return
+
+    def length(self):
+        return self._read_last_count()

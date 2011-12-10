@@ -1,6 +1,7 @@
 import os
 import re
 import random
+import time
 from logdb import Database
 from unittest2 import TestCase
 
@@ -35,20 +36,26 @@ def print_data(header=None):
 class TestBasic(TestCase):
     def test_operations(self):
         db = create_db()
-        print_data('beginning')
+        #print_data('beginning')
+        start = time.time()
         result = db.extend(['1', '2', '3'])
         #print_data('3 items')
         self.assertEqual(result, 1)
         result = db.extend(['4', '5', '6'])
         #print_data('6 items')
         self.assertEqual(result, 4)
-        for i in range(5000):
+        for i in range(10000):
             last = db.extend(['x' * i] * 10)
+        end_write = time.time()
+        print 'Time to write %s items: %i seconds' % (db.length(), end_write - start)
         #print_data('a bunch of stuff')
-        for i in range(5000):
-            pos = random.randint(1, last)
-            length = random.randint(1, 100)
-            db.read(pos, length)
         self.assertEqual(list(db.read(1, 2)), [(1, '1'), (2, '2')])
         self.assertEqual(list(db.read(1, 3)), [(1, '1'), (2, '2'), (3, '3')])
         self.assertEqual(list(db.read(3, 4)), [(3, '3'), (4, '4'), (5, '5'), (6, '6')])
+        READ_COUNT = 5000000
+        for i in range(READ_COUNT):
+            pos = random.randint(1, last)
+            length = random.randint(1, 100)
+            db.read(pos, length)
+        end_read = time.time()
+        print 'Time to read %s items: %i seconds' % (READ_COUNT, end_read - end_write)
