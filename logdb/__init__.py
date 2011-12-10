@@ -9,7 +9,7 @@ pair_encoding = struct.Struct('<II')
 
 class Database(object):
 
-    INDEX_SIZE = 100
+    INDEX_SIZE = 1000
 
     def __init__(self, filename):
         ## FIXME: a race condition here:
@@ -56,7 +56,7 @@ class Database(object):
             data = self.fp.read(8)
             yield pair_encoding.unpack(data)
             pos += 1
-            if pos > self.INDEX_SIZE:
+            if pos >= self.INDEX_SIZE:
                 pos = 0
                 self.fp.seek(self._index_bytes(pos))
             if end < start:
@@ -77,15 +77,14 @@ class Database(object):
             if len(data) < 4:
                 raise Exception('Unexpected end of file when expecting size (%r)' % data)
             size, = int_encoding.unpack(data)
-            content = self.fp.read(size - 5)
-            data = self.fp.read(4)
-            if len(data) < 4:
-                raise Exception('Unexpected end of file when expecting count (%r)' % data)
-            count, = int_encoding.unpack(data)
-            data = self.fp.read(1)
-            if data != '\xff':
-                raise Exception('Expected \\xff marker (not %r)' % data)
-            yield count, content
+            assert size >= 5, [self.fp.tell(), size, self.fp.read(5)]
+            content = self.fp.read(size)
+            if len(content) < size:
+                raise Exception('Unexpected end of file when expecting count (%r)' % content)
+            count, = int_encoding.unpack(content[-5:-1])
+            if content[-1] != '\xff':
+                raise Exception('Expected \\xff marker (not %r)' % content[-1])
+            yield count, content[:-5]
 
     def _encode_item(self, count, data):
         return int_encoding.pack(len(data) + 5) + data + int_encoding.pack(count) + '\xff'
@@ -96,10 +95,6 @@ class Database(object):
         data = self.fp.read(4)
         self.fp.read(1)
         return int_encoding.unpack(data)[0]
-
-    def _first_bytes(self):
-        """Returns (1, byte_pos_of_first_item)"""
-        return (1, self.INDEX_SIZE * 8 + 8)
 
     def extend(self, datas):
         """Appends the data to the database, returning the integer
@@ -139,12 +134,13 @@ class Database(object):
         if length == 0:
             return
         start, end = self._read_start_end()
-        best = self._first_bytes()
+        best = self.INDEX_SIZE * 8 + 8
         for count, bytes in self._iter_index(start, end):
             if count > seek:
                 break
-            best = count, bytes
-        self.fp.seek(best[1])
+            best = bytes
+        assert best >= self.INDEX_SIZE * 8 + 8, "Bad location result: %r (for %r)" % (best, seek)
+        self.fp.seek(best)
         for count, data in self._iter_items():
             if count == seek:
                 yield count, data

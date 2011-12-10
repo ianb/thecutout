@@ -44,18 +44,25 @@ class TestBasic(TestCase):
         result = db.extend(['4', '5', '6'])
         #print_data('6 items')
         self.assertEqual(result, 4)
-        for i in range(10000):
+        for i in range(1000):
             last = db.extend(['x' * i] * 10)
         end_write = time.time()
-        print 'Time to write %s items: %i seconds' % (db.length(), end_write - start)
+        print 'Time to write %s items: %i seconds (%i/second)' % (
+            db.length(), end_write - start, db.length() / (end_write - start))
         #print_data('a bunch of stuff')
         self.assertEqual(list(db.read(1, 2)), [(1, '1'), (2, '2')])
         self.assertEqual(list(db.read(1, 3)), [(1, '1'), (2, '2'), (3, '3')])
         self.assertEqual(list(db.read(3, 4)), [(3, '3'), (4, '4'), (5, '5'), (6, '6')])
-        READ_COUNT = 5000000
-        for i in range(READ_COUNT):
+        READ_COUNT = 10000
+        for i in xrange(READ_COUNT):
             pos = random.randint(1, last)
             length = random.randint(1, 100)
-            db.read(pos, length)
+            list(db.read(pos, length))
         end_read = time.time()
-        print 'Time to read %s items: %i seconds' % (READ_COUNT, end_read - end_write)
+        print 'Time to read %s items: %i seconds (%i/second)' % (
+            READ_COUNT, end_read - end_write, READ_COUNT / (end_read - end_write))
+
+
+if __name__ == '__main__':
+    import cProfile
+    cProfile.run('TestBasic("test_operations").test_operations()')
