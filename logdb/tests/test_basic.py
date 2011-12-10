@@ -22,8 +22,6 @@ def print_data(header=None):
     fp = open(tmp_filename, 'rb')
     data = fp.read()
     for i in range(0, len(data), 4):
-        if i == 8 + Database.INDEX_SIZE * 8:
-            print '-' * 20
         print '%3i' % i,
         for j in range(4):
             if len(data) > i + j:
@@ -49,18 +47,25 @@ class TestBasic(TestCase):
         end_write = time.time()
         print 'Time to write %s items: %i seconds (%i/second)' % (
             db.length(), end_write - start, db.length() / (end_write - start))
-        #print_data('a bunch of stuff')
-        self.assertEqual(list(db.read(1, 2)), [(1, '1'), (2, '2')])
-        self.assertEqual(list(db.read(1, 3)), [(1, '1'), (2, '2'), (3, '3')])
-        self.assertEqual(list(db.read(3, 4)), [(3, '3'), (4, '4'), (5, '5'), (6, '6')])
-        READ_COUNT = 10000
+        self.assertEqual(list(db.read(last + 8)), [(10006, 'x' * 999)])
+        self.assertEqual(list(db.read(last + 9)), [])
+        all = list(db.read(0))
+        self.assertEqual(list(reversed(all[-6:])), [(1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5'), (6, '6')])
+        READ_COUNT = 100
         for i in xrange(READ_COUNT):
             pos = random.randint(1, last)
-            length = random.randint(1, 100)
-            list(db.read(pos, length))
+            list(db.read(pos))
         end_read = time.time()
-        print 'Time to read %s items: %i seconds (%i/second)' % (
+        print 'Time to read %s items anywhere: %i seconds (%i/second)' % (
             READ_COUNT, end_read - end_write, READ_COUNT / (end_read - end_write))
+        SMALL_COUNT = 1000
+        for i in xrange(SMALL_COUNT):
+            pos = random.randint(last - 100, last)
+            list(db.read(pos))
+        end_small = time.time()
+        print 'Time to read %s small items (from last 1-100 items): %i seconds (%i/second)' % (
+            SMALL_COUNT, end_small - end_read, SMALL_COUNT / (end_small - end_read))
+
 
 
 if __name__ == '__main__':

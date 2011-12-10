@@ -9,92 +9,47 @@ pair_encoding = struct.Struct('<II')
 
 class Database(object):
 
-    INDEX_SIZE = 1000
-
     def __init__(self, filename):
         ## FIXME: a race condition here:
         exists = os.path.exists(filename)
         if not exists:
             self.fp = open(filename, 'w+b')
-            self.fp.write(pair_encoding.pack(0, 0))
-            self.fp.write('\x00' * (self.INDEX_SIZE * 8))
             # Write a dummy record
             self.fp.write(self._encode_item(0, ''))
         else:
             self.fp = open(filename, 'r+b')
 
-    def _read_start_end(self):
-        """Reads the index start/end position from the beginning of
-        the file"""
-        self.fp.seek(0)
-        return pair_encoding.unpack(self.fp.read(8))
-
-    def _write_start_end(self, start, end):
-        """Writes the index start/end position to the beginning of the
-        file"""
-        self.fp.seek(0)
-        self.fp.write(pair_encoding.pack(start, end))
-
-    def _increment_start_end(self, start, end):
-        """Increments end, and pushes start forward too if necessary"""
-        end = (end + 1) % self.INDEX_SIZE
-        if end == start:
-            start = (start + 1) % self.INDEX_SIZE
-        return start, end
-
-    def _index_bytes(self, pos):
-        """Given an index position, give the absolute file/byte
-        position of that index entry"""
-        return pos * 8 + 8
-
-    def _iter_index(self, start, end):
-        """Yields (count, bytes) from the index; start and end should be given
-        from _read_start_end()"""
-        pos = start
-        self.fp.seek(self._index_bytes(pos))
-        while 1:
-            data = self.fp.read(8)
-            yield pair_encoding.unpack(data)
-            pos += 1
-            if pos >= self.INDEX_SIZE:
-                pos = 0
-                self.fp.seek(self._index_bytes(pos))
-            if end < start:
-                if pos >= end and pos < start:
-                    break
-            else:
-                if pos >= end:
-                    break
-
-    def _iter_items(self):
-        """Iterates items, from the current file position.  Yields
-        (count, data)"""
-        while 1:
-            data = self.fp.read(4)
-            if not data:
-                # We're at the end of the file, that's okay
-                return
-            if len(data) < 4:
-                raise Exception('Unexpected end of file when expecting size (%r)' % data)
-            size, = int_encoding.unpack(data)
-            assert size >= 5, [self.fp.tell(), size, self.fp.read(5)]
-            content = self.fp.read(size)
-            if len(content) < size:
-                raise Exception('Unexpected end of file when expecting count (%r)' % content)
-            count, = int_encoding.unpack(content[-5:-1])
-            if content[-1] != '\xff':
-                raise Exception('Expected \\xff marker (not %r)' % content[-1])
-            yield count, content[:-5]
-
     def _encode_item(self, count, data):
-        return int_encoding.pack(len(data) + 5) + data + int_encoding.pack(count) + '\xff'
+        length = len(data)
+        return int_encoding.pack(length) + data + pair_encoding.pack(length, count)
 
-    def _read_last_count(self):
-        """Read the last count from the file, and position the file at the end"""
-        self.fp.seek(-5, os.SEEK_END)
-        data = self.fp.read(4)
-        self.fp.read(1)
-        return int_encoding.unpack(data)[0]
+    def _fetch_item(self, prev_start_pos=None):
+        """Iterates items, in reverse, from the current file position.
+        It can start from an explicit position, or the current
+        position (default=None).  A position of -1 means the end of
+        the file.  The position should point to the entry immediately
+        after the one you want to fetch.
+
+        Returns (count, data, start_pos)
+
+        Leaves the file position in an unuseful position.
+        """
+        if prev_start_pos == -1:
+            self.fp.seek(-8, os.SEEK_END)
+        elif prev_start_pos is None:
+            self.fp.seek(-8, os.SEEK_CUR)
+        else:
+            self.fp.seek(prev_start_pos - 8)
+        data = self.fp.read(8)
+        size, count = pair_encoding.unpack(data)
+        self.fp.seek(-size - 12, os.SEEK_CUR)
+        start_pos = self.fp.tell()
+        content = self.fp.read(size + 4)
+        size_check, = int_encoding.unpack(content[:4])
+        if size_check != size:
+            raise Exception('Size at start and end do not match (%r!=%r, pos=%r)'
+                            % (size_check, size, self.fp.tell() - size - 4))
+        return count, content[4:], start_pos
 
     def extend(self, datas):
         """Appends the data to the database, returning the integer
@@ -103,56 +58,30 @@ class Database(object):
         if not datas:
             raise Exception('You must give some data')
         lock_file(self.fp, LOCK_EX)
-        last_count = self._read_last_count()
-        self.fp.seek(0, os.SEEK_END)
+        self.fp.seek(-4, os.SEEK_END)
+        last_count, = int_encoding.unpack(self.fp.read(4))
         first_datas = last_count + 1
-        first_datas_bytes = self.fp.tell()
         count = first_datas
-        written_length = 0
         for data in datas:
             assert isinstance(data, str)
             enc_data = self._encode_item(count, data)
-            written_length += len(enc_data)
             self.fp.write(enc_data)
             count += 1
-        start, end = self._read_start_end()
-        self.fp.seek(self._index_bytes(end))
-        self.fp.write(pair_encoding.pack(first_datas, first_datas_bytes))
-        start, end = self._increment_start_end(start, end)
-        self._write_start_end(start, end)
-        lock_file(self.fp, LOCK_UN, 0, 4)
+        lock_file(self.fp, LOCK_UN)
         return first_datas
 
-    def read(self, seek, length=-1):
-        """Read items from the database, starting from count, max
-        length (or -1 means to the end)
-
-        yields (count, data)
+    def read(self, least):
+        """Yields (count, data), in reverse, up to but not including least
         """
-        assert isinstance(seek, int)
-        assert seek > 0
-        if length == 0:
-            return
-        start, end = self._read_start_end()
-        best = self.INDEX_SIZE * 8 + 8
-        for count, bytes in self._iter_index(start, end):
-            if count > seek:
-                break
-            best = bytes
-        assert best >= self.INDEX_SIZE * 8 + 8, "Bad location result: %r (for %r)" % (best, seek)
-        self.fp.seek(best)
-        for count, data in self._iter_items():
-            if count == seek:
-                yield count, data
-                length -= 1
-                break
-        if not length:
-            return
-        for count, data in self._iter_items():
-            yield count, data
-            length -= 1
-            if not length:
+        assert isinstance(least, int)
+        assert least >= 0
+        pos = -1
+        while 1:
+            count, data, pos = self._fetch_item(pos)
+            if count <= least:
                 return
+            yield count, data
 
     def length(self):
-        return self._read_last_count()
+        self.fp.seek(-4, os.SEEK_END)
+        return int_encoding.unpack(self.fp.read(4))[0]
