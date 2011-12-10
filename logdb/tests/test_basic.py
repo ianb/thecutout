@@ -67,7 +67,6 @@ class TestBasic(TestCase):
             SMALL_COUNT, end_small - end_read, SMALL_COUNT / (end_small - end_read))
 
 
-
 if __name__ == '__main__':
     import cProfile
     cProfile.run('TestBasic("test_operations").test_operations()')

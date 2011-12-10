@@ -11,6 +11,7 @@ class Database(object):
 
     def __init__(self, filename):
         ## FIXME: a race condition here:
+        self.filename = filename
         exists = os.path.exists(filename)
         if not exists:
             self.fp = open(filename, 'w+b')
@@ -81,6 +82,12 @@ class Database(object):
             if count <= least:
                 return
             yield count, data
+
+    def clear(self):
+        self.fp.close()
+        self.fp = open(self.filename, 'w+b')
+        # Write a dummy record
+        self.fp.write(self._encode_item(0, ''))
 
     def length(self):
         self.fp.seek(-4, os.SEEK_END)
