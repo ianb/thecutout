@@ -4,6 +4,7 @@ import os
 import sys
 import time
 from logdb import Database
+from logdb.streamdb import Database as StreamDatabase
 from logdb.sql import MySQLStorage
 
 DATA = string.ascii_letters
@@ -149,6 +150,11 @@ parser.add_option(
     default=1000,
     type='int')
 
+parser.add_option(
+    '--stream',
+    action='store_true',
+    help="Use the logdb.streamdb database instead of logdb.Database")
+
 
 def main():
     options, args = parser.parse_args()
@@ -164,9 +170,13 @@ def main():
         if not os.path.exists(dir):
             print 'Creating %s' % dir
             os.makedirs(dir)
+        if options.stream:
+            DatabaseConstructor = StreamDatabase
+        else:
+            DatabaseConstructor = Database
 
         def loader(name):
-            return Database(os.path.join(dir, name + '.db'))
+            return DatabaseConstructor(os.path.join(dir, name + '.db'))
 
     runner = Runner(db_count=options.db_count,
                     read_portion=options.read,
