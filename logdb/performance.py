@@ -57,7 +57,10 @@ class Runner(object):
         db_name = random.choice(self.dbs)
         db = self.db_loader(db_name)
         if random.random() < self.read_portion:
-            self.run_reads(db, times)
+            if random.random() < self.large_read_portion:
+                self.run_large_reads(db, times)
+            else:
+                self.run_reads(db, times)
         else:
             self.run_writes(db, times)
 
@@ -68,13 +71,18 @@ class Runner(object):
             return
         self.counter.start('reads')
         for i in xrange(times):
-            if random.random() < self.large_read_portion:
-                lowest = 1
-            else:
-                lowest = max(0, length - 100)
+            lowest = max(1, length - 100)
             start = random.randint(lowest, length)
             list(db.read(start))
         self.counter.end('reads', times)
+
+    def run_large_reads(self, db, times):
+        length = db.length()
+        self.counter.start('large reads')
+        for i in xrange(times):
+            start = random.randint(1, length)
+            list(db.read(start))
+        self.counter.end('large reads', times)
 
     def run_writes(self, db, times):
         ## Generally we don't write big chunks, even if we write
@@ -155,6 +163,11 @@ parser.add_option(
     action='store_true',
     help="Use the logdb.streamdb database instead of logdb.Database")
 
+parser.add_option(
+    '--profile',
+    action='store_true',
+    help="Use the profiler, print output after running")
+
 
 def main():
     options, args = parser.parse_args()
@@ -184,7 +197,11 @@ def main():
                     db_loader=loader)
 
     runner.preload(options.preload)
-    runner.run_many(options.reps, options.times)
+    if options.profile:
+        import cProfile
+        cProfile.run('runner.run_many(options.reps, options.times)')
+    else:
+        runner.run_many(options.reps, options.times)
     runner.counter.summarize()
 
 
