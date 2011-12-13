@@ -1,4 +1,5 @@
 import os
+import shutil
 from fcntl import lockf as lock_file
 from fcntl import LOCK_UN, LOCK_EX
 import struct
@@ -115,3 +116,53 @@ class Database(object):
 
     def length(self):
         return self._read_last_count()
+
+    def copy(self, exclude_counts, dest_filename, dest_index_filename=None):
+        """Copies this database to a new database, but excluding the
+        excluded counts.
+
+        exclude_counts should be a set-like object (which can include a list
+        or dictionary, but a set is best)."""
+        ## We use an exclude list, because if you don't know about an item then
+        ## we should copy it over.
+        ## FIXME: we might read someone else's partial-write.  But if we lock, get the
+        ## self.index_fp.tell(), and don't read past that, we should be okay.
+        if dest_index_filename is None:
+            dest_index_filename = dest_filename + '.index'
+        data_fp = open(dest_filename, 'wb')
+        index_fp = open(dest_index_filename, 'wb')
+        self.index_fp.seek(0)
+        self.data_fp.seek(0)
+        data_fp_pos = 0
+        while 1:
+            chunk = self.index_fp.read(12)
+            if not chunk:
+                break
+            length, pos, count = triple_encoding.unpack(chunk)
+            if count in exclude_counts:
+                assert count != 0
+                self.data_fp.seek(length, os.SEEK_CUR)
+                continue
+            assert self.data_fp.tell() == pos
+            index_fp.write(triple_encoding.pack(length, data_fp_pos, count))
+            data = self.data_fp.read(length)
+            assert len(data) == length
+            data_fp.write(data)
+            data_fp_pos += length
+        data_fp.close()
+        index_fp.close()
+
+    def overwrite(self, data_filename, index_filename):
+        """Overwrites this database with the given files"""
+        lock_file(self.index_fp, LOCK_EX)
+        self.index_fp.seek(0)
+        # First make sure no one can do anything:
+        self.index_fp.truncate()
+        self.data_fp.close()
+        os.unlink(self.data_filename)
+        os.rename(data_filename, self.data_filename)
+        self.data_fp = open(self.data_filename, 'r+b')
+        fp = open(index_filename, 'rb')
+        shutil.copyfile(fp, self.index_fp)
+        fp.close()
+        os.unlink(index_filename)
