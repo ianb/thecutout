@@ -166,3 +166,12 @@ class Database(object):
         shutil.copyfile(fp, self.index_fp)
         fp.close()
         os.unlink(index_filename)
+
+    def delete(self):
+        self.close()
+        os.unlink(self.index_filename)
+        os.unlink(self.data_filename)
+
+    def close(self):
+        self.index_fp.close()
+        self.data_fp.close()
