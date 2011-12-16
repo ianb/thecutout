@@ -8,6 +8,10 @@ int_encoding = struct.Struct('<I')
 triple_encoding = struct.Struct('<III')
 
 
+class ExpectationFailed(Exception):
+    pass
+
+
 class Database(object):
 
     def __init__(self, data_filename, index_filename=None):
@@ -62,26 +66,30 @@ class Database(object):
             diff = seek_count - count
             self.index_fp.seek(diff * 12 - 4, os.SEEK_CUR)
 
-    def extend(self, datas):
+    def extend(self, datas, expect_latest=None):
         """Appends the data to the database, returning the integer
         counter for the first item in the data
         """
         lock_file(self.index_fp, LOCK_EX)
-        count = self._read_last_count()
-        count += 1
-        first_datas = count
-        self.index_fp.seek(0, os.SEEK_END)
-        self.data_fp.seek(0, os.SEEK_END)
-        pos = self.data_fp.tell()
-        for data in datas:
-            assert isinstance(data, str)
-            length = len(data)
-            self.data_fp.write(data)
-            self.index_fp.write(triple_encoding.pack(length, pos, count))
+        try:
+            count = self._read_last_count()
+            if expect_latest is not None and count > expect_latest:
+                raise ExpectationFailed
             count += 1
-            pos += length
-        lock_file(self.index_fp, LOCK_UN)
-        return first_datas
+            first_datas = count
+            self.index_fp.seek(0, os.SEEK_END)
+            self.data_fp.seek(0, os.SEEK_END)
+            pos = self.data_fp.tell()
+            for data in datas:
+                assert isinstance(data, str)
+                length = len(data)
+                self.data_fp.write(data)
+                self.index_fp.write(triple_encoding.pack(length, pos, count))
+                count += 1
+                pos += length
+            return first_datas
+        finally:
+            lock_file(self.index_fp, LOCK_UN)
 
     def read(self, above, last=-1):
         assert isinstance(above, int)
