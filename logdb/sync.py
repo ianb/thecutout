@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 import urllib
 import simplejson as json
@@ -52,12 +53,23 @@ class UserStorage(object):
         db.collection_id = collection_id
         return db
 
+    def clear(self):
+        shutil.rmtree(self.dir)
+        os.mkdir(self.dir)
+
 
 class Application(object):
 
     def __init__(self, storage, mock_browserid=False):
         self.storage = storage
         self.mock_browserid = mock_browserid
+
+    def unauthorized(self, reason):
+        resp = exc.HTTPUnauthorized()
+        ## FIXME: arg, doesn't work, dumb webob.exc
+        resp.content_type = 'text/plain'
+        resp.body = reason
+        return resp
 
     def update_json(self, data, **kw):
         if isinstance(data, str):
@@ -89,16 +101,16 @@ class Application(object):
         resp = json.loads(resp.read())
         if not self.mock_browserid:
             if resp['status'] != 'okay':
-                raise exc.HTTPAuthorizationRequired("Invalid assertion")
+                raise self.unauthorized("Invalid assertion")
             if resp['email'] != username:
-                raise exc.HTTPAuthorizationRequired("Invalid user in assertion")
+                raise self.unauthorized("Invalid user in assertion")
         return {"X-Set-Authorization": "SyncToken %s" % self.sign_auth(domain, username)}
 
     def check_synctoken(self, data, domain, username):
         nonce, rest = data.split(':', 1)
         expected = self.sign_auth(domain, username, nonce)
         if expected != data:
-            raise exc.HTTPAuthorizationRequired("Invalid SyncToken")
+            raise self.unauthorized("Invalid SyncToken")
         return None
 
     def sign_auth(self, domain, username, nonce=None):
@@ -116,7 +128,7 @@ class Application(object):
             raise exc.HTTPBadRequest('You may only include one of "exclude" or "include"')
         auth = req.headers.get('Authorization')
         if not auth:
-            raise exc.HTTPAuthorizationRequired
+            raise self.unauthorized('No Authorization header provided')
         auth_headers = self.check_auth(auth, domain, username)
         db = self.storage.for_user(username, domain)
         collection_id = req.GET.get('collection_id')
@@ -183,8 +195,10 @@ class Application(object):
         limit = int(req.GET.get('limit', 0))
         items = db.read(since)
         if limit:
-            items = iter(items)
-            items = [items.next() for i in range(limit)]
+            new_items = []
+            for c, item in zip(xrange(limit), items):
+                new_items.append(item)
+            items = new_items
         if 'include' in req.GET or 'exclude' in req.GET:
             return self.get_filtered(req, db, items)
         result = '{"objects":[%s]}' % (
@@ -204,3 +218,35 @@ class Application(object):
                 continue
             objects.append((count, item))
         return dict(objects=objects)
+
+if __name__ == '__main__':
+    import optparse
+    parser = optparse.OptionParser(
+        usage='%prog [OPTIONS] DIR')
+    parser.add_option(
+        '--port', '-p',
+        metavar='PORT',
+        help="Port to serve on (default %default)",
+        default=5000,
+        type='int')
+    parser.add_option(
+        '--mock-browserid',
+        action='store_true',
+        help="Don't check browserid assertions")
+    parser.add_option(
+        '--clear',
+        action='store_true',
+        help="Clear out all existing databases")
+    options, args = parser.parse_args()
+    if not args:
+        parser.error('You give a DIR')
+    from paste.httpserver import serve
+    storage = UserStorage(args[0])
+    if options.clear:
+        print 'Clearing %s' % storage.dir
+        storage.clear()
+    app = Application(storage, mock_browserid=options.mock_browserid)
+    try:
+        serve(app, port=options.port)
+    except KeyboardInterrupt:
+        pass
