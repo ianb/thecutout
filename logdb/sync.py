@@ -60,9 +60,11 @@ class UserStorage(object):
 
 class Application(object):
 
-    def __init__(self, storage, mock_browserid=False):
+    def __init__(self, storage, mock_browserid=False,
+                 remove_browserid=False):
         self.storage = storage
         self.mock_browserid = mock_browserid
+        self.remove_browserid = remove_browserid
 
     def unauthorized(self, reason):
         resp = exc.HTTPUnauthorized()
@@ -95,15 +97,16 @@ class Application(object):
             audience = 'https://%s' % domain
         else:
             audience = 'http://%s' % domain
-        resp = urllib.urlopen(
-            'https://browserid.org/verify', 'assertion=%s&audience=http://%s' % (
-                urllib.quote(data), urllib.quote(audience)))
-        resp = json.loads(resp.read())
-        if not self.mock_browserid:
-            if resp['status'] != 'okay':
-                raise self.unauthorized("Invalid assertion")
-            if resp['email'] != username:
-                raise self.unauthorized("Invalid user in assertion")
+        if not self.remove_browserid:
+            resp = urllib.urlopen(
+                'https://browserid.org/verify', 'assertion=%s&audience=http://%s' % (
+                    urllib.quote(data), urllib.quote(audience)))
+            resp = json.loads(resp.read())
+            if not self.mock_browserid:
+                if resp['status'] != 'okay':
+                    raise self.unauthorized("Invalid assertion")
+                if resp['email'] != username:
+                    raise self.unauthorized("Invalid user in assertion")
         return {"X-Set-Authorization": "SyncToken %s" % self.sign_auth(domain, username)}
 
     def check_synctoken(self, data, domain, username):
@@ -234,6 +237,10 @@ if __name__ == '__main__':
         action='store_true',
         help="Don't check browserid assertions")
     parser.add_option(
+        '--remove-browserid',
+        action='store_true',
+        help="Don't even send browserid assertions")
+    parser.add_option(
         '--clear',
         action='store_true',
         help="Clear out all existing databases")
@@ -245,7 +252,8 @@ if __name__ == '__main__':
     if options.clear:
         print 'Clearing %s' % storage.dir
         storage.clear()
-    app = Application(storage, mock_browserid=options.mock_browserid)
+    app = Application(storage, mock_browserid=options.mock_browserid,
+                      remove_browserid=options.remove_browserid)
     try:
         serve(app, port=options.port)
     except KeyboardInterrupt:

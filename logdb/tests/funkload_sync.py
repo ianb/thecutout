@@ -67,7 +67,7 @@ class Simple(FunkLoadTestCase):
                 continue
             break
 
-    def test_simple(self, loops=5):
+    def test_simple(self, loops=2):
         # we'll do a post, then 10 gets, then a post, and so on
         for i in xrange(loops):
             self.post_bunch()
