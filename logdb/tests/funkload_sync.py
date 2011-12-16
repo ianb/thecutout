@@ -24,8 +24,7 @@ class Simple(FunkLoadTestCase):
         self.collection_id = None
 
     def url(self, domain='example.com', username=None, **kw):
-        if username is None:
-            username = self.username()
+        username = username or self.user
         if self.collection_id:
             kw['collection_id'] = self.collection_id
         url = '%s/%s/%s' % (self.server_url, urllib.quote(domain), urllib.quote(username))
@@ -36,7 +35,9 @@ class Simple(FunkLoadTestCase):
     def get_bunch(self, limit=50):
         while 1:
             resp = self.get(self.url(since=self.since, limit=limit), description='Get data')
-            print dir(resp)
+            if resp.headers.get('x-set-authorization'):
+                self.authorization = resp.headers['x-set-authorization']
+                self.setHeader('Authorization', self.authorization)
             self.assertEqual(resp.code, 200)
             data = json.loads(resp.body)
             if 'collection_id' in data:
@@ -55,8 +56,11 @@ class Simple(FunkLoadTestCase):
         while 1:
             resp = self.post(self.url(since=self.since), params=Data('application/json', json.dumps(items)),
                              description="Adding data")
+            if resp.headers.get('x-set-authorization'):
+                self.authorization = resp.headers['x-set-authorization']
+                self.setHeader('Authorization', self.authorization)
             self.assertEqual(resp.code, 200)
-            data = json.loads(resp)
+            data = json.loads(resp.body)
             if data.get('since_invalid'):
                 self.since = data['objects'][-1][0]
                 self.biggest_since = max(self.since, self.biggest_since)
@@ -65,7 +69,12 @@ class Simple(FunkLoadTestCase):
 
     def test_simple(self, loops=5):
         # we'll do a post, then 10 gets, then a post, and so on
-
+        for i in xrange(loops):
+            self.post_bunch()
+            for j in xrange(10):
+                if self.biggest_since and not j % 3:
+                    self.since = random.randint(1, self.biggest_since)
+                self.get_bunch()
 
 
 if __name__ in ('main', '__main__'):

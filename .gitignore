@@ -1,4 +1,9 @@
 *.egg-info
 dbs
 dbs-stream
+test-dbs
+*-bench.xml*
+*-test.xml*
+funkload.log
+funkload.xml
 logdb/tests/test-sync-dbs
