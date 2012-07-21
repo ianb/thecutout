@@ -8,3 +8,4 @@ funkload.log
 funkload.xml
 logdb/tests/test-sync-dbs
 logdb/tests/test_simple-20*
+data
