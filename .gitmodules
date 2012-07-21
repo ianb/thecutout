@@ -1,0 +1,3 @@
+[submodule "logdb/tests/syncclient/doctestjs"]
+	path = logdb/tests/syncclient/doctestjs
+	url = git@github.com:ianb/doctestjs.git

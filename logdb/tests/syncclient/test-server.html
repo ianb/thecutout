@@ -1,0 +1,46 @@
+<html>
+<head>
+<title>Sync.Server</title>
+<link rel="stylesheet" href="doctestjs/doctest.css">
+<script src="doctestjs/doctest.js"></script>
+<script src="doctestjs/esprima/esprima.js"></script>
+<script src="doctestjs/jshint/jshint.js"></script>
+<script src="mock-server.js"></script>
+<script src="./db/syncclient.js"></script>
+</head>
+<body class="autodoctest">
+
+<h1>Sync.Server</h1>
+
+<div>This is a test of the mock server, and also a kind of document of
+how the server should act.</div>
+
+<div>
+  <h2>The Server</h2>
+
+  <pre class="commenttest" src="test-server.js"></pre>
+
+</div>
+
+<div class="test">
+<h2>Invalid requests</h2>
+
+<div>Not yet completed: this should test for all sorts of invalid
+requests.  Quick brainstorm:
+
+  <ol>
+    <li>Invalid .put documents</li>
+    <li>Invalid .put manifests</li>
+    <li>.put out of sync with a .get (need ?since on put)</li>
+    <li>Trying to access a server when it isn't logged in</li>
+    <li>Login that has expired</li>
+    <li>Invalid origins, missing origins</li>
+    <li>Totally invalid .puts (e.g., put an object not a list, or put null)</li>
+  </ol>
+
+</div>
+
+</div>
+
+
+</body> </html>
