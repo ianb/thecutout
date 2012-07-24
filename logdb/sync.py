@@ -2,6 +2,7 @@ import os
 import shutil
 import time
 import urllib
+import urlparse
 try:
     import simplejson as json
 except ImportError:
@@ -48,7 +49,8 @@ class Application(object):
 
     def __init__(self, storage=None, dir=None, mock_browserid=False,
                  remove_browserid=False,
-                 include_syncclient=False):
+                 include_syncclient=False,
+                 secret_filename='/tmp/logdb-secret.txt'):
         if storage is None and dir:
             storage = UserStorage(dir)
         self.storage = storage
@@ -58,6 +60,7 @@ class Application(object):
         self._syncclient_app = None
         self._syncclient_mtime = None
         self._syncclient_app_url = None
+        self._secret_filename = secret_filename
 
     def unauthorized(self, reason):
         return Response(
@@ -75,6 +78,9 @@ class Application(object):
     def __call__(self, req):
         if self.include_syncclient and req.path_info == '/syncclient.js':
             return self.syncclient(req)
+        if req.path_info == '/verify':
+            return self.verify(req)
+        self.annotate_auth(req)
         domain = req.path_info_pop()
         username = req.path_info_pop()
         bucket = req.path_info
@@ -85,10 +91,11 @@ class Application(object):
             raise Exception(
                 'REMOTE_USER is not formatted as username/domain')
         remote_username, remote_domain = remote_user.split('/', 1)
+        remote_domain = urlparse.urlsplit(remote_domain).netloc.split(':')[0]
         if remote_username != username:
-            return self.unauthorized('Incorrect authentication provided (%r)' % remote_username)
+            return self.unauthorized('Incorrect authentication provided (%r != %r)' % (remote_username, username))
         if remote_domain != domain:
-            return self.unauthorized('Incorrect authentication provided: bad domain (%r)' % remote_domain)
+            return self.unauthorized('Incorrect authentication provided: bad domain (%r != %r)' % (remote_domain, domain))
         if 'include' in req.GET and 'exclude' in req.GET:
             raise exc.HTTPBadRequest('You may only include one of "exclude" or "include"')
         db = self.storage.for_user(domain, username, bucket)
@@ -208,3 +215,55 @@ class Application(object):
                 conditional_response=True,
                 body=content)
         return self._syncclient_app
+
+    def verify(self, req):
+        try:
+            assertion = req.POST['assertion']
+            audience = req.POST['audience']
+        except KeyError, e:
+            return exc.HTTPBadRequest('Missing key: %s' % e)
+        r = urllib.urlopen(
+            "https://browserid.org/verify",
+            urllib.urlencode(
+                dict(assertion=assertion, audience=audience)))
+        r = json.loads(r.read())
+        if r['status'] == 'okay':
+            r['audience'] = audience
+            static = json.dumps(r)
+            static = sign(get_secret(self._secret_filename), static) + '.' + static
+            r['auth'] = {'query': {'auth': static}}
+        return Response(json=r)
+
+    def annotate_auth(self, req):
+        auth = req.GET.get('auth')
+        print 'auth', repr(auth)
+        if auth:
+            sig, data = auth.split('.', 1)
+            print 'sig', sig, 'expected', sign(get_secret(self._secret_filename), data)
+            if sign(get_secret(self._secret_filename), data) == sig:
+                data = json.loads(data)
+                req.environ['REMOTE_USER'] = data['email'] + '/' + data['audience']
+                print 'set', req.environ['REMOTE_USER']
+
+
+def b64_encode(s):
+    import base64
+    return base64.urlsafe_b64encode(s).strip('=').strip()
+
+
+def get_secret(filename):
+    if not os.path.exists(filename):
+        length = 10
+        secret = b64_encode(os.urandom(length))
+        with open(filename, 'wb') as fp:
+            fp.write(secret)
+    else:
+        with open(filename, 'rb') as fp:
+            secret = fp.read()
+    return secret
+
+
+def sign(secret, text):
+    import hmac
+    import hashlib
+    return b64_encode(hmac.new(secret, text, hashlib.sha1).digest())
