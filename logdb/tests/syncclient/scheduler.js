@@ -8,16 +8,17 @@ server needs to be run with the client test overrides in place, so we
 can trigger various cases and make sure the scheduling works.
 */
 
-var server = new Sync.Server(doctest.params.server || '/verify');
-var service = new Sync.Service({server: server, appData: {}});
+var auth = Authenticator();
+
+var server = new Sync.Server(auth.serverUrl, auth);
+var appData = new MockAppData('appData');
+var storage = new Sync.LocalStorage('sync::');
+storage.clear();
+var service = new Sync.Service(server, appData, storage);
 print(service);
-// => [SyncService server: ...]
+// => [Sync.Service server: ... appData: ...]
 
-var user = 'test-' + (new Date().getTime()) + '@example.com';
-print(user);
-// => test-?@example.com
-
-var scheduler = new Sync.Scheduler(service);
+var scheduler = new Sync.Scheduler(service, auth);
 
 function override(t, data) {
   var done = false;
@@ -163,11 +164,11 @@ get();
 Next, we'll give a quick try at triggering logout/auth:
 */
 
-print(service.loggedIn());
+print(auth.loggedIn());
 // => true
 override('__testing__', {status: 401});
 // => Completed
 get();
 // => ...
-print(service.loggedIn());
+print(auth.loggedIn());
 // => false
