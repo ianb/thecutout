@@ -64,10 +64,49 @@ optional depending on the function).
 
 */
 
+function Sync(appData, options) {
+  if (! appData) {
+    throw "You must provide a Sync(appData) appData argument";
+  }
+  var serverUrl = options.serverUrl || '';
+  var bucket = options.bucket || '{domain}/{user}/bucket';
+  var verifyUrl = options.verifyUrl;
+  if ((! serverUrl) && ! Sync.baseUrl) {
+    throw 'syncclient.js has no hardcoded server URL; you must provide a serverUrl option';
+  }
+  if (! verifyUrl) {
+    verifyUrl = Sync.baseUrl + serverUrl.replace(/\/+$/, '') + '/verify';
+  }
+  Sync._allowOptions({
+    name: 'Sync()',
+    options: options,
+    allowed: ['serverUrl', 'bucket', 'verifyUrl', 'storage']
+  })
+  var storage = options.storage || new Sync.LocalStorage('sync::');
+  var authenticator = new Sync.PersonaAuthenticator(verifyUrl, storage);
+  var server = new Sync.Server(serverUrl, bucket, authenticator);
+  var service = new Sync.Service(server, appData, storage);
+  var scheduler = new Sync.Scheduler(service, authenticator);
+  return scheduler;
+};
+
 var Sync = {};
 
 // Note, this URL gets rewritten by the server:
 Sync.baseUrl = null;
+
+Sync.noop = function () {};
+
+Sync._allowOptions = function (args) {
+  var ops = args.options;
+  for (var i in args) {
+    if (args.hasOwnProperty(i)) {
+      if (args.allowed.indexOf(i) == -1) {
+        throw 'The option "' + i + '" is now allowed for ' + args.name;
+      }
+    }
+  }
+};
 
 // FIXME: change args to positional arguments
 Sync.Service = function (server, appData, storage) {
@@ -126,7 +165,7 @@ Sync.Service.prototype = {
     } else {
       allSet = true;
     }
-    this.appData.resetSaved();
+    this.appData.resetSaved(Sync.noop);
   },
 
   /* Sends a status message to any listener */
@@ -292,12 +331,19 @@ Sync.Service.prototype = {
       this._setSyncPosition(results.objects[results.objects.length-1][0]);
       // FIXME: Do we care about the callback?
       var received = [];
-      for (var i=0; i<results.objects.length; i++) {
-        received.push(results.objects[i][1]);
+      var seen = {};
+      for (var i=results.objects.length-1; i>=0; i--) {
+        var o = results.objects[i][1];
+        if (seen.hasOwnProperty(o.id)) {
+          continue;
+        }
+        received.push(o);
+        seen[o.id] = true;
       }
+      received.reverse();
       var error = null;
       try {
-        this.appData.objectsReceived(received);
+        this.appData.objectsReceived(received, Sync.noop);
       } catch (e) {
         error = e;
       }
@@ -323,6 +369,9 @@ Sync.Service.prototype = {
      Calls callback() with no arguments on success. */
   _putUpdates: function (callback) {
     this.appData.getPendingObjects((function (error, result) {
+      // FIXME: I *really wish* I could identify the difference
+      // between "errors" and a mis-called callback(result).  Maybe
+      // require error to be an object, not an array?
       if (error) {
         return callback && callback(error);
       }
@@ -368,7 +417,11 @@ Sync.Service.prototype = {
     }
     var errors = this._validateObjects(objects);
     if (errors) {
-      this.appData.reportObjectErrors(errors);
+      if (this.appData.reportObjectErrors) {
+        this.appData.reportObjectErrors(errors);
+      } else {
+        log('Objects have errors:', errors);
+      }
       return callback && callback({error: 'Objects have errors', detail: errors});
     }
     this.sendStatus({status: 'sync_put', count: objects.length});
@@ -404,7 +457,7 @@ Sync.Service.prototype = {
       // FIXME: do I care about the result of objectsSaved?
       var error = null;;
       try {
-        this.appData.objectsSaved(objects);
+        this.appData.objectsSaved(objects, Sync.noop);
       } catch (e) {
         // If there's an exception we'll consider the whole thing a bust
         error = e;
@@ -734,6 +787,7 @@ Sync.Scheduler = function (service, authenticator) {
     this.retryAfter(value);
     this.schedule();
   }).bind(this);
+  this.adjustForVisibility();
 };
 
 Sync.Scheduler.prototype = {
@@ -842,6 +896,48 @@ Sync.Scheduler.prototype = {
       }
       this._periodAddition = retryAfter - this._period;
     }
+  },
+
+  /* Add a visibilitychange event, with browser compatibility.  Calls
+     handler(event, hiddenState) when the state changes */
+  _addVisibilityHandler: function (handler) {
+    // Browser compatibility:
+    var hidden, visibilityChange;
+    if (typeof document.hidden !== "undefined") {
+      hidden = "hidden";
+      visibilityChange = "visibilitychange";
+    } else if (typeof document.mozHidden !== "undefined") {
+      hidden = "mozHidden";
+      visibilityChange = "mozvisibilitychange";
+    } else if (typeof document.msHidden !== "undefined") {
+      hidden = "msHidden";
+      visibilityChange = "msvisibilitychange";
+    } else if (typeof document.webkitHidden !== "undefined") {
+      hidden = "webkitHidden";
+      visibilityChange = "webkitvisibilitychange";
+    } else {
+      // Otherwise the browser doesn't support the event
+      return;
+    }
+    document.addEventListener(visibilityChange, function (event) {
+      var state = document[hidden];
+      handler.call(this, event, state);
+    }, false);
+  },
+
+  adjustForVisibility: function () {
+    this._addVisibilityHandler(this._visibilityChanged.bind(this));
+  },
+
+  _visibilityChanged: function (event, hidden) {
+    if (hidden) {
+      log('Scheduling slow due to tab being hidden');
+      this.scheduleSlowly();
+    } else {
+      log('Scheduling immediately due to tab becoming visible');
+      this._period = this.settings.normalPeriod;
+      this.scheduleImmediately();
+    }
   }
 
 };
@@ -881,8 +977,8 @@ Sync.PersonaAuthenticator.prototype = {
     }
   },
 
-  request: function () {
-    navigator.id.request();
+  request: function (options) {
+    navigator.id.request(options);
   },
 
   watch: function (options) {
@@ -953,7 +1049,7 @@ Sync.PersonaAuthenticator.prototype = {
 
       onlogout: (function () {
         this.authData = this.email = null;
-        this.storage.set('authData', null);
+        this.storage.put('authData', null);
         this._callOnlogout();
       }).bind(this)
     });
