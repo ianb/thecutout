@@ -1,5 +1,68 @@
 # Sync With LogDB
 
+## Quick Start
+
+First, get a server going.  I don't have a good description of this. Hopefully I'll get a hosted version up sometime.
+
+Next, include this in your page:
+
+    <script src="server-location/syncclient.js"></script>
+    <script src="https://browserid.org/include.js"></script>
+
+Now, create an object to integrate with your stored data:
+
+    var MyAppData = {
+      getPendingObjects: function (callback) {
+        var result = [];
+        for (object in objectsThatArentSaved) {
+          result.push({id: object.id, data: object});
+        }
+        for (id in objectsThatWereDeleted) {
+          result.push({id: id, deleted: true});
+        }
+        callback(result);
+      },
+      objectsSaved: function (objects) {
+        objects.forEach(function (object) {
+          if (object.deleted) {
+            confirmDelete(object.id);
+          } else {
+            confirmSaved(object.data);
+          }
+        });
+      },
+      objectsReceived: function (objects) {
+        objects.forEach(function (object) {
+          if (object.deleted) {
+            deleteObject(object.id);
+          } else {
+            createObject(object.data);
+          }
+        });
+      },
+      onupdate: function () {}
+    };
+    sync = new Sync(MyAppData);
+    sync.watch({
+      onlogin: function (email) {
+        $('#login').text(email);
+      },
+      onlogout: function (email) {
+        $('#login').text('login');
+      }
+    });
+    $('#login').click(function () {
+      if ($('#login').text() == 'login') {
+        sync.request();
+      } else {
+        sync.logout();
+      }
+    });
+
+    // and call MyAppData.onupdate() whenever you update your objects
+
+That's it!  You also have a login system!
+
 ## Library
 
 The library is present in `syncclient.js`.  While there are several internals that you could poke around with, the "simple" version is just one function, `new Sync(appData, {options})` which returns a sync object.
