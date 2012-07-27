@@ -65,11 +65,23 @@ optional depending on the function).
 */
 
 function Sync(appData, options) {
+  if (this === window) {
+    throw "You forgot *new* Sync()";
+  }
   if (! appData) {
     throw "You must provide a Sync(appData) appData argument";
   }
+  Sync._allowOptions({
+    name: 'Sync()',
+    options: options,
+    allowed: ['serverUrl', 'bucket', 'appName', 'verifyUrl', 'storage', 'assertion']
+  })
   var serverUrl = options.serverUrl || '';
-  var bucket = options.bucket || '{domain}/{user}/bucket';
+  var bucket = options.bucket;
+  if (! bucket) {
+    bucket = options.appName || 'bucket';
+    bucket = '{domain}/{user}/' + bucket;
+  }
   var verifyUrl = options.verifyUrl;
   if ((! serverUrl) && ! Sync.baseUrl) {
     throw 'syncclient.js has no hardcoded server URL; you must provide a serverUrl option';
@@ -77,20 +89,45 @@ function Sync(appData, options) {
   if (! verifyUrl) {
     verifyUrl = Sync.baseUrl + serverUrl.replace(/\/+$/, '') + '/verify';
   }
-  Sync._allowOptions({
-    name: 'Sync()',
-    options: options,
-    allowed: ['serverUrl', 'bucket', 'verifyUrl', 'storage']
-  })
-  var storage = options.storage || new Sync.LocalStorage('sync::');
-  var authenticator = new Sync.PersonaAuthenticator(verifyUrl, storage);
-  var server = new Sync.Server(serverUrl, bucket, authenticator);
-  var service = new Sync.Service(server, appData, storage);
-  var scheduler = new Sync.Scheduler(service, authenticator);
-  return scheduler;
+  this.storage = options.storage || new Sync.LocalStorage('sync::');
+  this.authenticator = new Sync.PersonaAuthenticator(verifyUrl, this.storage, options.assertion);
+  this.server = new Sync.Server(serverUrl, bucket, this.authenticator);
+  this.service = new Sync.Service(this.server, appData, this.storage);
+  this.scheduler = new Sync.Scheduler(this.service, this.authenticator);
+  if (appData.onupdate !== undefined) {
+    appData.onupdate = this.scheduleImmediately.bind(this);
+  }
 };
 
-var Sync = {};
+Sync.prototype = {
+  lastSyncTime: function () {
+    return this.service.lastSyncTime();
+  },
+  resetSchedule: function () {
+    this.scheduler.resetSchedule();
+  },
+  scheduleImmediately: function () {
+    this.scheduler.scheduleImmediately();
+  },
+  scheduleSlowly: function () {
+    this.scheduler.scheduleSlowly();
+  },
+  activate: function () {
+    this.scheduler.activate();
+  },
+  deactivate: function () {
+    this.scheduler.deactivate();
+  },
+  logout: function () {
+    this.authenticator.logout();
+  },
+  watch: function (options) {
+    this.authenticator.watch(options);
+  },
+  reset: function (callback) {
+    this.service.reset(callback);
+  }
+};
 
 // Note, this URL gets rewritten by the server:
 Sync.baseUrl = null;
@@ -99,8 +136,8 @@ Sync.noop = function () {};
 
 Sync._allowOptions = function (args) {
   var ops = args.options;
-  for (var i in args) {
-    if (args.hasOwnProperty(i)) {
+  for (var i in ops) {
+    if (ops.hasOwnProperty(i)) {
       if (args.allowed.indexOf(i) == -1) {
         throw 'The option "' + i + '" is now allowed for ' + args.name;
       }
@@ -110,7 +147,7 @@ Sync._allowOptions = function (args) {
 
 // FIXME: change args to positional arguments
 Sync.Service = function (server, appData, storage) {
-  if (this === window) {
+  if (this === window || this === Sync) {
     throw 'You forgot new Sync.Service';
   }
   this.server = server;
@@ -328,10 +365,12 @@ Sync.Service.prototype = {
 
   _processUpdates: function (results, callback) {
     if (results.objects.length) {
+      // FIXME: also accept "until" here:
       this._setSyncPosition(results.objects[results.objects.length-1][0]);
       // FIXME: Do we care about the callback?
       var received = [];
       var seen = {};
+      // FIXME: see should be per-type
       for (var i=results.objects.length-1; i>=0; i--) {
         var o = results.objects[i][1];
         if (seen.hasOwnProperty(o.id)) {
@@ -658,6 +697,7 @@ Sync.Server.prototype = {
       throw 'server.setVariables() has not yet been called';
     }
     url += '?since=' + encodeURIComponent(since);
+    // FIXME: add collection_id=
     var req = this._createRequest('GET', url);
     req.onreadystatechange = (function () {
       if (req.readyState != 4) {
@@ -740,11 +780,8 @@ Sync.Server.prototype = {
     req.send(data);
   },
 
-  verifyUrl: function () {
-    return this._baseUrl + '/verify';
-  },
-
   setVariables: function (domain, username) {
+    // FIXME: I like nothing about this
     var name = this._bucketName;
     if (username) {
       name = name.replace(/\{user\}/g, encodeURIComponent(username));
@@ -942,8 +979,8 @@ Sync.Scheduler.prototype = {
 
 };
 
-Sync.PersonaAuthenticator = function (verifyUrl, storage) {
-  if (this === window) {
+Sync.PersonaAuthenticator = function (verifyUrl, storage, assertion) {
+  if (this === window || this === Sync) {
     throw 'You forgot new Sync.PersonaAuthenticator';
   }
   this.verifyUrl = verifyUrl;
@@ -951,10 +988,14 @@ Sync.PersonaAuthenticator = function (verifyUrl, storage) {
   this.authData = this.email = null;
   this.onlogins = [];
   this.onlogouts = [];
-  this._loadFromStorage((function () {
-    this._callWatch();
-  }).bind(this));
   this.domain = location.hostname;
+  if (assertion) {
+    this._assertionReceived(assertion);
+  } else {
+    this._loadFromStorage((function () {
+      this._callWatch();
+    }).bind(this));
+  }
 };
 
 Sync.PersonaAuthenticator.prototype = {
@@ -1007,51 +1048,53 @@ Sync.PersonaAuthenticator.prototype = {
     this._callOnlogout();
   },
 
+  _assertionReceived: function (assertion) {
+    log('Received assertion', assertion);
+    var req = new Sync.Server.prototype.XMLHttpRequest();
+    req.open('POST', this.verifyUrl);
+    var audience = location.protocol + '//' + location.host;
+    log('POST', this.verifyUrl, 'audience:', audience);
+    req.onreadystatechange = (function () {
+      if (req.readyState != 4) {
+        return;
+      }
+      if (req.status != 200) {
+        log('Error in auth:', req.status, req.statusText);
+        return;
+      }
+      try {
+        var result = JSON.parse(req.responseText);
+      } catch (e) {
+        log('Error parsing response:', req.responseText);
+        throw e;
+      }
+      if (result.status != "okay") {
+        // FIXME: or this.logout?
+        log('Login status not okay:', result);
+        this._callOnlogout();
+        return;
+      }
+      this.authData = result;
+      this.email = this.authData.email;
+      this.storage.put('authData', this.authData);
+      this._callOnlogin();
+    }.bind(this));
+    req.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    req.send('assertion=' + encodeURIComponent(assertion) +
+             '&audience=' + encodeURIComponent(audience));
+  },
+
+  logout: function () {
+    this.authData = this.email = null;
+    this.storage.put('authData', null);
+    this._callOnlogout();
+  },
+
   _callWatch: function () {
     navigator.id.watch({
       loggedInEmail: this.email,
-
-      onlogin: (function (assertion) {
-        log('Received assertion', assertion);
-        var req = new Sync.Server.prototype.XMLHttpRequest();
-        req.open('POST', this.verifyUrl);
-        var audience = location.protocol + '//' + location.host;
-        log('POST', this.verifyUrl, 'audience:', audience);
-        req.onreadystatechange = (function () {
-          if (req.readyState != 4) {
-            return;
-          }
-          if (req.status != 200) {
-            log('Error in auth:', req.status, req.statusText);
-            return;
-          }
-          try {
-            var result = JSON.parse(req.responseText);
-          } catch (e) {
-            log('Error parsing response:', req.responseText);
-            throw e;
-          }
-          if (result.status != "okay") {
-            // FIXME: or this.logout?
-            log('Login status not okay:', result);
-            this._callOnlogout();
-            return;
-          }
-          this.authData = result;
-          this.email = this.authData.email;
-          this.storage.put('authData', this.authData);
-          this._callOnlogin();
-        }.bind(this));
-        req.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        req.send('assertion=' + encodeURIComponent(assertion) +
-                 '&audience=' + encodeURIComponent(audience));
-      }).bind(this),
-
-      onlogout: (function () {
-        this.authData = this.email = null;
-        this.storage.put('authData', null);
-        this._callOnlogout();
-      }).bind(this)
+      onlogin: this._assertionReceived.bind(this),
+      onlogout: this.logout.bind(this)
     });
   },
 
@@ -1116,7 +1159,7 @@ Sync.PersonaAuthenticator.prototype = {
 };
 
 Sync.LocalStorage = function (prefix) {
-  if (this === window) {
+  if (this === window || this === Sync) {
     throw 'You forgot new Sync.LocalStorage';
   }
   this._prefix = prefix || '';
@@ -1188,22 +1231,4 @@ Sync.LocalStorage.prototype = {
     return callback && callback();
   }
 
-};
-
-Sync.assemble = function (options) {
-  var serverUrl = options.serverUrl || '';
-  var bucket = options.bucket || '{domain}/{user}/bucket';
-  var verifyUrl = options.verifyUrl;
-  if (! verifyUrl) {
-    verifyUrl = Sync.baseUrl + serverUrl.replace(/\/+$/, '') + '/verify';
-  }
-  if (! options.appData) {
-    throw 'You must provide a Sync.assemble({appData: ...})';
-  }
-  var storage = options.storage || new Sync.LocalStorage('sync::');
-  var authenticator = new Sync.PersonaAuthenticator(verifyUrl, storage);
-  var server = new Sync.Server(serverUrl, bucket, authenticator);
-  var service = new Sync.Service(server, options.appData, storage);
-  var scheduler = new Sync.Scheduler(service, authenticator);
-  return scheduler;
 };
