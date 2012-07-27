@@ -121,6 +121,9 @@ Sync.prototype = {
   logout: function () {
     this.authenticator.logout();
   },
+  request: function (args) {
+    this.authenticator.request(args);
+  },
   watch: function (options) {
     this.authenticator.watch(options);
   },
