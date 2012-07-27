@@ -11,6 +11,7 @@ Next, include this in your page:
 
 Now, create an object to integrate with your stored data:
 
+```javascript
     var MyAppData = {
       getPendingObjects: function (callback) {
         var result = [];
@@ -60,6 +61,7 @@ Now, create an object to integrate with your stored data:
     });
 
     // and call MyAppData.onupdate() whenever you update your objects
+```
 
 That's it!  You also have a login system!
 
@@ -79,11 +81,13 @@ Your function should call `callback(null, [objects])` (the objects could be an e
 
 Each object should look like:
 
+```javascript
     {
       id: "some stable id",
       type: "type-of-object",
       data: {some data}
     }
+```
 
 The `id` is something you should make yourself, but it should distinguish between updates and new objects.  Creating an ID with a UUID is perfectly fine, so long as you make that ID persistent.  The id should be a string or integer.
 
@@ -93,11 +97,13 @@ The `data` is the actual data.  Some JSONable object.
 
 If you have a deleted object, you should represent it like:
 
+```javascript
     {
       id: "some stable id",
       type: "type-of-object",
       deleted: true
     }
+```
 
 Note that having returned these objects, they may not get used!
 
@@ -185,11 +191,13 @@ Everything happens at a single URL endpoint, we'll call it `/USER`
 
 Each object looks like this:
 
+```javascript
     {type: "type_name",
      id: "unique identifier among objects of this type",
      expires: timestamp,
      data: {the thing itself}
     }
+```
 
 Note the `data` can be any JSONable object, including a string.
 
@@ -199,11 +207,13 @@ The `id` key must be unique for the type (submitting another key by the same id 
 
 You can also have a deleted object, which lives as an object in sync but doesn't have any data:
 
+```javascript
     {type: "type_name",
      id: "unique identifier",
      expires: timestamp,
      deleted: true
     }
+```
 
 ### Requests
 
@@ -213,9 +223,11 @@ You can retrieve and send updates.  The first time is simple, you just want to a
 
 This returns the response document:
 
+```javascript
     {collection_id: "string_id",
      objects: [[counter1, object1], [counter2, object2]]
     }
+```
 
 The `collection_id` key is only in there because it was not sent with the request; it's a kind of "hello".
 
@@ -229,10 +241,12 @@ If `objects` is empty, you start with a counter `0`.
 
 If the collection has changed, and your `string_id` doesn't match the server anymore, then you'll get:
 
+```javascript
     {collection_changed: true,
      collection_id: "new_id",
      objects: [[counter1, ...], ...]
     }
+```
 
 You should then forget your remembered `since` value and all the updates you have sent to the server.  This signals that whatever server or data you were communicating with before is gone.
 
@@ -244,9 +258,11 @@ When you have updates you want to send, you do:
 
 This may return a `collection_changed` error, but also there may have been an update since you last retrieved objects.  This will not do! The `since=counter2` shows when you last did a GET. If there have been updates you get a new GET-like response:
 
+```javascript
     {since_invalid: true,
      objects: [[counter3, object]]
     }
+```
 
 You should incorporate the new object (which might conflict some with your own objects, which is why we do all this!), and then resubmit the request:
 
@@ -255,7 +271,9 @@ You should incorporate the new object (which might conflict some with your own o
 
 A successful response will be:
 
+```javascript
     {object_counters: [counter4, counter5, ...]}
+```
 
 The counters will correspond to each item that you sent.  You should keep the highest counter as your `since` value.  (**Note:** maybe this should include a timestamp of sorts too?)
 
@@ -305,12 +323,14 @@ Each request has to have authentication.  The authentication uses BrowserID.  To
 
 This will return a JSON response that will indicate how to authenticate future requests, like:
 
+```javascript
     {
       "email": "user@example.com",
       "auth": {
         "query": {"auth": "auth_string"}
       }
     }
+```
 
 What is in the `"auth"` key determines what you should do to authenticate future requests.  401 responses indicate you should re-authenticate with a new assertion.
 
