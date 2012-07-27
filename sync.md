@@ -6,8 +6,10 @@ First, get a server going.  I don't have a good description of this. Hopefully I
 
 Next, include this in your page:
 
-    <script src="server-location/syncclient.js"></script>
-    <script src="https://browserid.org/include.js"></script>
+```html
+<script src="server-location/syncclient.js"></script>
+<script src="https://browserid.org/include.js"></script>
+```
 
 Now, create an object to integrate with your stored data:
 
@@ -361,3 +363,9 @@ The POST results, when successful, also update `since`.  And the POST results wh
 #### Quarantine
 
 Sometimes you may not understand an object you receive; its type, or the format it is in.  This might be because of corruption, but it might also be because another client has a newer/richer notion of the type than you do.
+
+## To Do
+
+* Add storage where large blobs can be lazily stored, URL-addressable, collected when the item is deleted.
+
+* Implement periodic garbage collection
