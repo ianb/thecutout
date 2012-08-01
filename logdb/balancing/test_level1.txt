@@ -1,0 +1,25 @@
+    >>> from logdb.balancing import level1
+    >>> from logdb.balancing.forwarder import rooted
+    >>> app = level1.Application(preload=10, preload_dir='./tmp-data')
+    >>> app = rooted(app)
+    >>> from webob.dec import wsgify
+    >>> @wsgify.middleware
+    ... def set_remote_user(req, app, username):
+    ...     req.environ['REMOTE_USER'] = username
+    ...     return app
+    >>> app = set_remote_user(app, username='a@b/c')
+    >>> from webob import Request
+    >>> def make_req(name, **kw):
+    ...     url = 'http://localhost/c/a@b/' + name
+    ...     return Request.blank(url, **kw)
+    >>> print make_req('1')
+    GET /c/a@b/1 HTTP/1.0...
+    Host: localhost:80
+    >>> print make_req('1').send(app)
+    Sending to node-001
+    200 OK
+    ...
+    {"collection_id": "...", "objects": []}
+    >>> print make_req('2').send(app)
+    Sending to node-007
+    ...

@@ -66,7 +66,8 @@ class Database(object):
             diff = seek_count - count
             self.index_fp.seek(diff * 12 - 4, os.SEEK_CUR)
 
-    def extend(self, datas, expect_latest=None):
+    def extend(self, datas, expect_latest=None, expect_last_counter=None,
+               with_counters=False):
         """Appends the data to the database, returning the integer
         counter for the first item in the data
         """
@@ -75,23 +76,33 @@ class Database(object):
             count = self._read_last_count()
             if expect_latest is not None and count > expect_latest:
                 raise ExpectationFailed
-            count += 1
-            first_datas = count
+            if expect_last_counter is not None and count != expect_last_counter:
+                raise ExpectationFailed
+            first_datas = None
             self.index_fp.seek(0, os.SEEK_END)
             self.data_fp.seek(0, os.SEEK_END)
             pos = self.data_fp.tell()
             for data in datas:
+                if with_counters:
+                    next_count, data = data
+                    assert next_count > count, "Bad next count: %r (should be greater than %r)" % (next_count, count)
+                    count = next_count
+                else:
+                    count += 1
+                if first_datas is None:
+                    first_datas = count
                 assert isinstance(data, str)
                 length = len(data)
                 self.data_fp.write(data)
                 self.index_fp.write(triple_encoding.pack(length, pos, count))
-                count += 1
                 pos += length
             return first_datas
         finally:
             lock_file(self.index_fp, LOCK_UN)
 
     def read(self, above, last=-1):
+        """Yields items starting at `above` and until (and including)
+        `last` if it is given"""
         assert isinstance(above, int)
         assert above >= 0
         self._seek_index(above)
@@ -101,7 +112,7 @@ class Database(object):
             if not chunk:
                 break
             length, pos, count = triple_encoding.unpack(chunk)
-            assert count > above
+            assert count > above, "failed: count=%r > above=%r; chunk=%r; tell=%r; trip=%r" % (count, above, chunk, self.index_fp.tell(), [length, pos, count, self.index_filename, self.index_fp.seek(0) or self.index_fp.read(), self.data_fp.seek(0) or self.data_fp.read()])
             if last_pos is None:
                 self.data_fp.seek(pos)
                 last_pos = pos
@@ -114,6 +125,25 @@ class Database(object):
             yield count, data
             if last > 0 and last <= count:
                 break
+
+    def get_file_positions(self, until):
+        """Return (index_position, database_position) where the
+        position is the start of the record `until`, or whatever
+        record is next (if until is missing).
+
+        This can be used to establish a chunk of the database that
+        represents a range."""
+        if until is None:
+            return (os.path.getsize(self.index_filename),
+                    os.path.getsize(self.data_filename))
+        self._seek_index(until)
+        index_pos = self.index_fp.tell()
+        chunk = self.index_fp.read(12)
+        if not chunk:
+            # until doesn't exist
+            return (index_pos, os.path.getsize(self.data_filename))
+        length, pos, count = triple_encoding.unpack(chunk)
+        return (index_pos, pos)
 
     def clear(self):
         self.data_fp.close()
