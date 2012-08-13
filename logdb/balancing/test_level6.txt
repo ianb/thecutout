@@ -7,12 +7,12 @@ First, we setup some helpers:
 * Create a `make_req` function that sets up a reasonable Request and url
 
     >>> import urlparse
-    >>> from logdb.balancing import level5
+    >>> from logdb.balancing import level6
     >>> from logdb.balancing.forwarder import rooted
     >>> import os, shutil
     >>> if os.path.exists('./tmp-data'):
     ...     shutil.rmtree('./tmp-data')
-    >>> balance_app = app = level5.Application(preload=10, preload_dir='./tmp-data')
+    >>> balance_app = app = level6.Application(preload=10, preload_dir='./tmp-data')
     >>> app = rooted(app)
     >>> from webob.dec import wsgify
     >>> @wsgify.middleware
@@ -193,3 +193,38 @@ further on:
     Disabling node node-002
     Sending /c/a@b/1 to node node-004
       success, deleting
+
+Now we'll setup a new bucket, and remove servers:
+
+    >>> balance_app.node_list('/c/a@b/x')
+    ['node-006', 'node-004']
+    >>> req = make_req('x', method='POST', json=[0])
+    >>> resp = req.send(app)
+    >>> print resp
+    200 OK...
+    X-Node-Name: node-006
+    <BLANKLINE>
+    {"object_counters":[1],"collection_id":"..."}
+    >>> orig_resp = make_req('x').send(app).json
+    >>> print orig_resp
+    {u'collection_id': u'...', u'objects': [[1, 0]]}
+    >>> balance_app.remove_node('node-004', force=True, root=app)
+    Backup node node-004 for /c/a@b/x removed
+      success, added to node-007 (from node-006)
+    Backup node node-004 for /c/a@b/1 removed
+      success, added to node-000 (from replace-2)
+    >>> make_req('x').send(app).json == orig_resp
+    True
+    >>> make_req('/node-006/c/a@b/x').send(app).json == orig_resp
+    True
+    >>> make_req('/node-007/c/a@b/x').send(app).json == orig_resp
+    True
+    >>> balance_app.remove_node('node-006', force=True, root=app)
+    Master node node-006 for /c/a@b/x removed
+      success, added to node-003 (from node-007)
+    >>> make_req('x').send(app).json == orig_resp
+    True
+    >>> make_req('/node-007/c/a@b/x').send(app).json == orig_resp
+    True
+    >>> make_req('/node-003/c/a@b/x').send(app).json == orig_resp
+    True

@@ -273,6 +273,8 @@ class Application(object):
             return self.remove_self(req)
         if path_info == '/query-deprecate':
             return self.query_deprecate(req)
+        if path_info == '/take-over':
+            return self.take_over(req)
         self.annotate_auth(req)
         domain = req.path_info_pop()
         username = req.path_info_pop()
@@ -658,6 +660,46 @@ class Application(object):
                 fp = StringIO(resp.body)
                 db.decode_db(fp, append_queue=True)
         return Response(status=201)
+
+    def take_over(self, req):
+        from webob import Request
+        from logdb.balancing.forwarder import forward
+        self.assert_is_internal(req)
+        status = Response(content_type='text/plain')
+        data = req.json
+        nodes = data['other']
+        self_name = data['name']
+        bad_node = data['bad']
+        assert self_name != bad_node
+        backups = data['backups']
+        from hash_ring import HashRing
+        ring = HashRing(nodes)
+        for domain, username, bucket in self.storage.all_dbs():
+            assert bucket.startswith('/')
+            path = '/' + domain + '/' + username + bucket
+            iterator = iter(ring.iterate_nodes(path))
+            active_nodes = [iterator.next() for i in xrange(backups + 1)]
+            replacement_node = iterator.next()
+            # Not all the backups should try to restore the database, so instead
+            # just the "first" does it
+            restore = False
+            if active_nodes[0] == bad_node and active_nodes[1:] and active_nodes[1] == self_name:
+                status.write('Master node %s for %s removed\n' % (bad_node, path))
+                restore = True
+            elif bad_node in active_nodes and active_nodes[0] == self_name:
+                status.write('Backup node %s for %s removed\n' % (bad_node, path))
+                restore = True
+            if not restore:
+                continue
+            db = self.storage.for_user(domain, username, bucket)
+            send = Request.blank(replacement_node + urllib.quote(path) + '?paste',
+                                 method='POST', body=''.join(db.encode_db()))
+            send.environ['logdb.root'] = req.environ.get('logdb.root')
+            resp = forward(send)
+            assert resp.status_code == 201, str(resp)
+            #status.write('  nodes: %r - %r / %r\n' % (active_nodes, bad_node, self_name))
+            status.write('  success, added to %s (from %s)\n' % (replacement_node, self_name))
+        return status
 
 
 def b64_encode(s):
