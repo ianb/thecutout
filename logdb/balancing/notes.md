@@ -10,8 +10,8 @@ A tiered approach to implementing load balancing, failover, and replication with
 
 5. Add a new node, taking over some primary and some backup services from other nodes.
 
-6. Remove a node (not suddenly).
+5.5. Remove a node (not suddenly).
 
-7. Make the number of backups dynamic (e.g., two backups).
+?. Make the number of backups dynamic (e.g., two backups).
 
-8. Remove a node suddenly/ungracefully.
+6. Remove a node suddenly/ungracefully.

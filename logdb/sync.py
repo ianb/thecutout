@@ -66,14 +66,27 @@ class Storage(object):
         self.dir = dir
         if not os.path.exists(dir):
             os.makedirs(dir)
-        col_filename = os.path.join(dir, 'collection_id.txt')
+        self.timer = timer
+        self._collection_id = None
+
+    @property
+    def collection_id(self):
+        if self._collection_id is not None:
+            return self._collection_id
+        col_filename = os.path.join(self.dir, 'collection_id.txt')
         if not os.path.exists(col_filename):
-            collection_id = '%06i' % (int(timer() * 100) % (10 ** 6))
+            collection_id = '%06i' % (int(self.timer() * 100) % (10 ** 6))
             self.set_collection_id(collection_id)
         else:
             with open(col_filename, 'rb') as fp:
                 collection_id = fp.read()
-        self.collection_id = collection_id
+        self._collection_id = collection_id
+        return collection_id
+
+    @property
+    def has_collection_id(self):
+        col_filename = os.path.join(self.dir, 'collection_id.txt')
+        return os.path.exists(col_filename)
 
     def clear(self):
         shutil.rmtree(self.dir)
@@ -118,6 +131,7 @@ class Storage(object):
         col_filename = os.path.join(self.dir, 'collection_id.txt')
         with open(col_filename, 'wb') as fp:
             fp.write(collection_id)
+        self._collection_id = collection_id
 
     def deprecate(self):
         if self.is_deprecated:
@@ -298,10 +312,10 @@ class Application(object):
             resp_data = self.post(req, db)
         else:
             resp_data = self.get(req, db)
-        if 'collection_id' not in req.GET:
+        if 'collection_id' not in req.GET and db.has_collection_id:
             resp_data = self.update_json(resp_data, collection_id=db.collection_id)
         if not isinstance(resp_data, str):
-            resp_data = json.dumps(resp_data)
+            resp_data = json.dumps(resp_data, separators=(',', ':'))
         resp = Response(resp_data, content_type='application/json')
         return resp
 
@@ -375,7 +389,8 @@ class Application(object):
         url = urlparse.urljoin(req.application_url, '/' + backup)
         url += urllib.quote(req.path_info)
         if req.query_string:
-            url += '?' + url.query_string
+            ## FIXME: not sure if 'since' should propagate, or maybe it doesn't matter?
+            url += '?' + req.query_string
         backup_req = Request.blank(url, method='POST')
         backup_req.GET['backup-from-pos'] = str(last_pos)
         backup_req.GET['source'] = req.path_url
@@ -566,9 +581,9 @@ class Application(object):
                 db.clear()
                 continue
             iterator = iter(ring.iterate_nodes(path))
-            next = iterator.next()
-            assert next == self_name, next
+            active_nodes = [iterator.next() for i in xrange(data['backups'] + 1)]
             new_node = iterator.next()
+            assert self_name in active_nodes, '%r not in %r' % (self_name, active_nodes)
             status.write('Sending %s to node %s\n' % (path, new_node))
             url = urlparse.urljoin(req.application_url, '/' + new_node)
             send = Request.blank(url + urllib.quote(path) + '?paste',
@@ -587,6 +602,7 @@ class Application(object):
         nodes = data['other']
         self_name = data['name']
         new_node = data['new']
+        backups = data['backups']
         from hash_ring import HashRing
         ring = HashRing(nodes + [new_node])
         deprecated = []
@@ -594,9 +610,9 @@ class Application(object):
             assert bucket.startswith('/')
             path = '/' + domain + '/' + username + bucket
             iterator = iter(ring.iterate_nodes(path))
-            next = iterator.next()
-            next_plus_one = iterator.next()
-            if next == new_node and next_plus_one == self_name:
+            active_nodes = [iterator.next() for i in xrange(backups + 1)]
+            deprecated_node = iterator.next()
+            if deprecated_node == self_name and new_node in active_nodes:
                 deprecated.append(
                     {'path': path, 'domain': domain, 'username': username, 'bucket': bucket})
                 db = self.storage.for_user(domain, username, bucket)

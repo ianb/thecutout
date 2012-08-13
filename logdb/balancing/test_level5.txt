@@ -1,3 +1,11 @@
+First, we setup some helpers:
+
+* Keep data in `./tmp-data`
+* Setup a balancer with 10 preloaded nodes
+* Setup the recursive request sender (`rooted`)
+* Mock out authentication via `REMOTE_USER`
+* Create a `make_req` function that sets up a reasonable Request and url
+
     >>> import urlparse
     >>> from logdb.balancing import level5
     >>> from logdb.balancing.forwarder import rooted
@@ -16,6 +24,11 @@
     >>> def make_req(name, **kw):
     ...     url = urlparse.urljoin('http://localhost/c/a@b/', name)
     ...     return Request.blank(url, **kw)
+
+
+Now we demonstrate it does some basic stuff, sending requests to
+different nodes:
+
     >>> print make_req('1')
     GET /c/a@b/1 HTTP/1.0...
     Host: localhost:80
@@ -24,7 +37,11 @@
     ...
     X-Node-Name: node-001
     ...
-    {"collection_id": "...", "objects": []}
+    {"objects":[]}
+    >>> print make_req('1', method='POST', json=[1]).send(app)
+    200 OK...
+    X-Node-Name: node-001...
+    {"object_counters":[1],"collection_id":"..."}
     >>> print make_req('2').send(app)
     200 OK
     ...
@@ -35,25 +52,31 @@
     ...
     X-Node-Name: node-004
     ...
+
+Now we create a new node (`node-test`).  First we get a request to
+that will be routed to node-test (but isn't until we create it), then we
+make another request and make sure nothing changed.  Since we haven't
+added much this is mostly a test of `collection_id`:
+
+    >>> req = make_req('4', method='POST', json=[1, 2, 3])
+    >>> print req.send(app)
+    200 OK...
+    {"object_counters":[1,2,3],"collection_id":"..."}
     >>> old_resp = make_req('4').send(app).json
     >>> balance_app.add_node('node-test', True, root=app)
     Deprecating from http://localhostnode-test/node-000
+      deprecated: /c/a@b/4
     Deprecating from http://localhostnode-test/node-001
     Deprecating from http://localhostnode-test/node-002
     Deprecating from http://localhostnode-test/node-003
     Deprecating from http://localhostnode-test/node-004
-      deprecated: /c/a@b/4
     Deprecating from http://localhostnode-test/node-005
     Deprecating from http://localhostnode-test/node-006
     Deprecating from http://localhostnode-test/node-007
-      deprecated: /c/a@b/2
     Deprecating from http://localhostnode-test/node-008
     Deprecating from http://localhostnode-test/node-009
-    Copying database /c/a@b/4 from node-004
-      copied 30 bytes
-      deleted
-    Copying database /c/a@b/2 from node-007
-      copied 30 bytes
+    Copying database /c/a@b/4 from node-000
+      copied 69 bytes
       deleted
     done.
     >>> print make_req('4').send(app)
@@ -69,10 +92,14 @@
     ...
     X-Node-Name: node-test
     ...
+
+
+Now we do some very similar things when removing `node-001`:
+
     >>> old_resp = make_req('1').send(app).json
     >>> balance_app.remove_node('node-001', root=app)
     Disabling node node-001
-    Sending /c/a@b/1 to node node-002
+    Sending /c/a@b/1 to node node-009
       success, deleting
     >>> print make_req('1').send(app)
     200 OK
@@ -82,9 +109,14 @@
     >>> new_resp = make_req('1').send(app).json
     >>> new_resp['collection_id'] == old_resp['collection_id']
     True
-    >>> req = make_req('1', method='POST', json=[1, 2, 3])
+
+
+Next we test backups, backing up from `node-002` to `node-009` for
+requests for `1`:
+
+    >>> req = make_req('1?since=1', method='POST', json=[1, 2, 3])
     >>> print req
-    POST /c/a@b/1 HTTP/1.0...
+    POST /c/a@b/1?since=1 HTTP/1.0...
     Content-Length: 7...
     Host: localhost:80...
     <BLANKLINE>
@@ -94,14 +126,70 @@
     ...
     X-Node-Name: node-002
     ...
-    {"object_counters": [1, 2, 3], "collection_id": "..."}
+    {"object_counters":[2,3,4],"collection_id":"..."}
     >>> print make_req('1').send(app).json
-    {u'collection_id': u'...', u'objects': [[1, 1], [2, 2], [3, 3]]}
+    {u'collection_id': u'...', u'objects': [[1, 1], [2, 1], [3, 2], [4, 3]]}
     >>> node2 = make_req('/node-002/c/a@b/1').send(app).json
     >>> print node2
-    {u'collection_id': u'...', u'objects': [[1, 1], [2, 2], [3, 3]]}
+    {u'collection_id': u'...', u'objects': [[1, 1], [2, 1], [3, 2], [4, 3]]}
     >>> node9 = make_req('/node-009/c/a@b/1').send(app).json
     >>> print node9
-    {u'collection_id': u'...', u'objects': [[1, 1], [2, 2], [3, 3]]}
+    {u'collection_id': u'...', u'objects': [[1, 1], [2, 1], [3, 2], [4, 3]]}
     >>> node9 == node2
     True
+
+Now, having done a backup, we need to insert a new node and see that
+all the data moves about properly:
+
+    >>> resp = make_req('1').send(app)
+    >>> print resp
+    200 OK...
+    X-Node-Name: node-002
+    ...
+    >>> orig_data = resp.json
+    >>> print orig_data
+    {u'collection_id': u'...', u'objects': [[1, 1], [2, 1], [3, 2], [4, 3]]}
+    >>> balance_app.add_node('replace-2', True, root=app)
+    Deprecating from http://localhostreplace-2/node-000
+    Deprecating from http://localhostreplace-2/node-002
+    Deprecating from http://localhostreplace-2/node-003
+    Deprecating from http://localhostreplace-2/node-004
+      deprecated: /c/a@b/4
+    Deprecating from http://localhostreplace-2/node-005
+    Deprecating from http://localhostreplace-2/node-006
+    Deprecating from http://localhostreplace-2/node-007
+    Deprecating from http://localhostreplace-2/node-008
+    Deprecating from http://localhostreplace-2/node-009
+      deprecated: /c/a@b/1
+    Deprecating from http://localhostreplace-2/node-test
+    Copying database /c/a@b/4 from node-004
+      copied 69 bytes
+      deleted
+    Copying database /c/a@b/1 from node-009
+      copied 82 bytes
+      deleted
+    done.
+    >>> print make_req('1').send(app)
+    200 OK...
+    X-Node-Name: replace-2
+    ...
+    >>> print make_req('/node-009/c/a@b/1').send(app).json['objects']
+    []
+    >>> replace_2_data = make_req('/replace-2/c/a@b/1').send(app).json
+    >>> replace_2_data == orig_data
+    True
+    >>> backup_data = make_req('/node-002/c/a@b/1').send(app).json
+    >>> backup_data == orig_data
+    True
+
+As we see, we've replaced ``node-002`` with respect to the bucket
+``1``.  If we remove node-009 we should see nothing, because it's no
+longer the backup, and removing node-002 should move the backup
+further on:
+
+    >>> balance_app.remove_node('node-009', root=app)
+    Disabling node node-009
+    >>> balance_app.remove_node('node-002', root=app)
+    Disabling node node-002
+    Sending /c/a@b/1 to node node-004
+      success, deleting
