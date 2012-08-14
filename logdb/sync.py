@@ -298,7 +298,7 @@ class Application(object):
         """
         if self.include_syncclient and req.path_info == '/syncclient.js':
             return self.syncclient(req)
-        script_name, path_info = req.script_name, req.path_info
+        path_info = req.path_info
         if path_info == '/verify':
             return self.verify(req)
         if path_info == '/node-added':
@@ -310,7 +310,24 @@ class Application(object):
         if path_info == '/take-over':
             return self.take_over(req)
         self.annotate_auth(req)
-        domain = req.path_info_pop()
+        domain = req.path_info_peek()
+        headers = self.access_for_domain(domain)
+        _suppress_headers = []
+
+        def suppress_headers():
+            _suppress_headers.append(True)
+        if req.method == 'OPTIONS':
+            return Response(
+                status='200 OK',
+                body='',
+                headers=headers)
+        resp = self.get_database_response(req, domain, suppress_headers)
+        resp.headers.update(headers)
+        return resp
+
+    def get_database_response(self, req, domain, suppress_headers):
+        script_name, path_info = req.script_name, req.path_info
+        assert domain == req.path_info_pop()
         username = req.path_info_pop()
         bucket = req.path_info
         req.script_name, req.path_info = script_name, path_info
@@ -324,14 +341,18 @@ class Application(object):
             raise exc.HTTPBadRequest('You may only include one of "exclude" or "include"')
         db = self.storage.for_user(domain, username, bucket)
         if 'copy' in req.GET:
+            suppress_headers()
             return self.copy(req, db)
         elif 'paste' in req.GET:
+            suppress_headers()
             return self.paste(req, db)
         elif 'deprecate' in req.GET:
+            suppress_headers()
             return self.deprecate(req, db)
         elif 'delete' in req.GET:
             return self.delete(req, db)
         elif 'backup-from-pos' in req.GET:
+            suppress_headers()
             return self.apply_backup(req, db)
         if db.is_deprecated:
             return Response(status=503, retry_after=60, body='Data in transit')
@@ -354,6 +375,16 @@ class Application(object):
             resp_data = json.dumps(resp_data, separators=(',', ':'))
         resp = Response(resp_data, content_type='application/json')
         return resp
+
+    def access_for_domain(self, domain):
+        if '//' in domain:
+            domain = domain.split('//', 1)[1]
+        if '/' in domain:
+            domain = domain.split('/', 1)[0]
+        return {
+            'Access-Control-Allow-Methods': 'GET,POST',
+            'Access-Control-Allow-Origin': 'http://%s https://%s' % (domain, domain),
+            }
 
     def _check_auth(self, req, username, domain):
         remote_user = req.environ.get('REMOTE_USER')
