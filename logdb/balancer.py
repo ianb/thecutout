@@ -5,7 +5,7 @@ from hash_ring import HashRing
 import urllib
 import urlparse
 from logdb import sync
-from logdb.balancing.forwarder import forward
+from logdb.forwarder import forward
 
 
 class Application(object):
@@ -50,12 +50,17 @@ class Application(object):
         node.added(self.ring.nodes, backups=self.backups, root=root)
         self.ring = HashRing(self.ring.nodes + [url])
 
-    def remove_node(self, url, root=None):
+    def remove_node(self, url, root=None, force=False):
         node = SubNode(url)
-        node.remove(self.ring.nodes, backups=self.backups, root=root)
+        node.remove(self.ring.nodes, backups=self.backups, force=force, root=root)
         new_nodes = list(self.ring.nodes)
         new_nodes.remove(url)
         self.ring = HashRing(new_nodes)
+
+    def node_list(self, url):
+        iterator = iter(self.ring.iterate_nodes(url))
+        nodes = [iterator.next() for i in xrange(self.backups + 1)]
+        return nodes
 
 
 class SubNode(object):
@@ -81,7 +86,21 @@ class SubNode(object):
             self.url + '/node-added', json={'other': other_nodes, 'new': self.url, 'backups': backups})
         print forward(req, root=root).body.strip()
 
-    def remove(self, other_nodes, backups=0, root=None):
+    def remove(self, other_nodes, backups=0, root=None, force=False):
+        if force:
+            for other in other_nodes:
+                if other == self.url:
+                    continue
+                node = SubNode(other)
+                node.take_over(self.url, other_nodes, backups=backups, root=root)
+        else:
+            req = Request.blank(
+                self.url + '/remove-self', json={'other': other_nodes, 'name': self.url, 'backups': backups})
+            print forward(req, root=root).body.strip()
+
+    def take_over(self, bad_node, other_nodes, backups=0, root=None):
         req = Request.blank(
-            self.url + '/remove-self', json={'other': other_nodes, 'name': self.url, 'backups': backups})
-        print forward(req, root=root).body.strip()
+            self.url + '/take-over', json={'other': other_nodes, 'bad': bad_node, 'name': self.url, 'backups': backups})
+        body = forward(req, root=root).body.strip()
+        if body:
+            print body
