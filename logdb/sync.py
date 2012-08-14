@@ -3,15 +3,18 @@ import shutil
 import time
 import urllib
 import urlparse
+from cStringIO import StringIO
 try:
     import simplejson as json
 except ImportError:
     import json
 from webob.dec import wsgify
-from webob import Response
+from webob import Response, Request
 from webob import exc
+from hash_ring import HashRing
 from logdb import Database, ExpectationFailed
 from logdb import int_encoding
+from logdb.forwarder import forward
 
 
 syncclient_filename = os.path.join(
@@ -385,9 +388,6 @@ class Application(object):
         return dict(object_counters=counters)
 
     def post_backup(self, req, db, backup, last_pos):
-        import urlparse
-        from webob import Request
-        from logdb.balancing.forwarder import forward
         url = urlparse.urljoin(req.application_url, '/' + backup)
         url += urllib.quote(req.path_info)
         if req.query_string:
@@ -523,10 +523,6 @@ class Application(object):
 
     def node_added(self, req):
         self.assert_is_internal(req)
-        from logdb.balancing.forwarder import forward
-        import urlparse
-        from webob import Request
-        from cStringIO import StringIO
         status = Response(content_type='text/plain')
         data = req.json
         dbs = []
@@ -565,10 +561,6 @@ class Application(object):
 
     def remove_self(self, req):
         self.assert_is_internal(req)
-        from hash_ring import HashRing
-        import urlparse
-        from webob import Request
-        from logdb.balancing.forwarder import forward
         status = Response(content_type='text/plain')
         self.storage.disable()
         data = req.json
@@ -605,7 +597,6 @@ class Application(object):
         self_name = data['name']
         new_node = data['new']
         backups = data['backups']
-        from hash_ring import HashRing
         ring = HashRing(nodes + [new_node])
         deprecated = []
         for domain, username, bucket in self.storage.all_dbs():
@@ -622,9 +613,6 @@ class Application(object):
         return Response(json={'deprecated': deprecated})
 
     def apply_backup(self, req, db):
-        from webob import Request
-        from cStringIO import StringIO
-        from logdb.balancing.forwarder import forward
         self.assert_is_internal(req)
         backup_pos = int(req.GET['backup-from-pos'])
         source = req.GET['source']
@@ -662,8 +650,6 @@ class Application(object):
         return Response(status=201)
 
     def take_over(self, req):
-        from webob import Request
-        from logdb.balancing.forwarder import forward
         self.assert_is_internal(req)
         status = Response(content_type='text/plain')
         data = req.json
@@ -672,7 +658,6 @@ class Application(object):
         bad_node = data['bad']
         assert self_name != bad_node
         backups = data['backups']
-        from hash_ring import HashRing
         ring = HashRing(nodes)
         for domain, username, bucket in self.storage.all_dbs():
             assert bucket.startswith('/')
