@@ -1,3 +1,8 @@
+"""Implements the sync server
+
+This does not include routing and balancing, but does include the
+actual database handling."""
+
 import os
 import shutil
 import time
@@ -23,10 +28,11 @@ syncclient_filename = os.path.join(
 
 
 class StorageDeprecated(Exception):
-    pass
+    """Raised when you try to access a database that has been deprecated"""
 
 
 class UserStorage(object):
+    """A container for multiple databases."""
 
     def __init__(self, dir, timer=time.time):
         self.dir = dir
@@ -64,6 +70,7 @@ class UserStorage(object):
 
 
 class Storage(object):
+    """A single database."""
 
     def __init__(self, dir, timer=time.time):
         self.dir = dir
@@ -74,6 +81,7 @@ class Storage(object):
 
     @property
     def collection_id(self):
+        """Reads the collection_id from disk, creating if necessary"""
         if self._collection_id is not None:
             return self._collection_id
         col_filename = os.path.join(self.dir, 'collection_id.txt')
@@ -88,26 +96,35 @@ class Storage(object):
 
     @property
     def has_collection_id(self):
+        """Indicates if a collection_id has already been set on this
+        database.  ``GET`` requests to non-existant databases try to
+        avoid prematurely setting collection_id."""
         col_filename = os.path.join(self.dir, 'collection_id.txt')
         return os.path.exists(col_filename)
 
     def clear(self):
+        """Clears this database entirely."""
         shutil.rmtree(self.dir)
 
     @property
     def is_deprecated(self):
+        """A database can be deprecated, with the data still around
+        but not active.  Then ``.deprecated_db`` will work, but
+        ``.db`` will not"""
         return os.path.exists(os.path.join(self.dir, 'deprecated'))
 
     @property
     def db(self):
-        db_name = os.path.join(self.dir, 'database')
+        """Returns the logdb database"""
         if self.is_deprecated:
             raise StorageDeprecated()
+        db_name = os.path.join(self.dir, 'database')
         db = Database(db_name)
         return db
 
     @property
     def deprecated_db(self):
+        """Returns the logdb dataabse, if this is deprecated"""
         db_name = os.path.join(self.dir, 'deprecated')
         if not os.path.exists(db_name):
             raise IOError("File does not exist: %r" % db_name)
@@ -115,14 +132,18 @@ class Storage(object):
         return db
 
     @property
+    def has_queue(self):
+        """Indicates if this database has a pending queue (objects
+        that should be appended to the database, but have not yet
+        been)"""
+        return os.path.exists(os.path.join(self.dir, 'queue'))
+
+    @property
     def queue_db(self):
+        """The queue logdb database"""
         db_name = os.path.join(self.dir, 'queue')
         db = Database(db_name)
         return db
-
-    @property
-    def has_queue(self):
-        return os.path.exists(os.path.join(self.dir, 'queue'))
 
     @property
     def empty(self):
@@ -137,6 +158,7 @@ class Storage(object):
         self._collection_id = collection_id
 
     def deprecate(self):
+        """Deprecates the database"""
         if self.is_deprecated:
             return
         db_name = os.path.join(self.dir, 'database')
@@ -144,6 +166,8 @@ class Storage(object):
         os.rename(db_name + '.index', os.path.join(self.dir, 'deprecated.index'))
 
     def encode_db(self, until=None):
+        """Returns an iterator that yields the encoded database, for
+        use with ``?copy/?paste``"""
         collection_id = self.collection_id.encode('ascii')
         if self.is_deprecated:
             db = self.deprecated_db
@@ -155,6 +179,8 @@ class Storage(object):
                                db.data_filename, data_pos)
 
     def decode_db(self, fp, append_queue=False):
+        """Decodes the encoded database, as found in the file-like
+        `fp` object.  Overwrites colletion_id and the database"""
         (length,) = int_encoding.unpack(fp.read(4))
         collection_id = fp.read(length)
         col_filename = os.path.join(self.dir, 'new_collection_id.txt')
@@ -258,6 +284,9 @@ class Application(object):
             raise exc.HTTPForbidden('authorized only for internal')
 
     def update_json(self, data, **kw):
+        """Updates the JSON data `data` with any given keyword keys.
+        The data may be a dictionary or an encoded JSON object.
+        """
         if isinstance(data, str):
             data = json.loads(data)
         data.update(kw)
@@ -265,6 +294,8 @@ class Application(object):
 
     @wsgify
     def __call__(self, req):
+        """Responds to and routes all requests
+        """
         if self.include_syncclient and req.path_info == '/syncclient.js':
             return self.syncclient(req)
         script_name, path_info = req.script_name, req.path_info
@@ -340,6 +371,10 @@ class Application(object):
             return self.unauthorized('Incorrect authentication provided: bad domain (%r != %r)' % (remote_domain, domain))
 
     def post(self, req, db):
+        """Responds to ``POST /db-name``
+
+        Handles the public interface for adding to a database.
+        """
         try:
             data = req.json
         except ValueError:
@@ -388,6 +423,12 @@ class Application(object):
         return dict(object_counters=counters)
 
     def post_backup(self, req, db, backup, last_pos):
+        """Handles backups from a POST request.
+
+        Forwards the request, as come from the given database, and
+        with the known last position of this database.  `backup` is
+        the node to back up to.
+        """
         url = urlparse.urljoin(req.application_url, '/' + backup)
         url += urllib.quote(req.path_info)
         if req.query_string:
@@ -409,6 +450,10 @@ class Application(object):
             print 'WARNING: bad response from %s: %s' % (backup_req.url, resp)
 
     def get(self, req, db):
+        """Responds to ``GET /db-name``
+
+        Returns the (public-interface) GET request.
+        """
         try:
             since = int(req.GET.get('since', 0))
         except ValueError:
@@ -431,6 +476,10 @@ class Application(object):
         return result
 
     def get_filtered(self, req, db, items):
+        """Handles ``GET /db-name?include=...|exclude=...``
+
+        Filters out some items.
+        """
         include = req.GET.getall('include')
         exclude = req.GET.getall('exclude')
         objects = []
@@ -444,6 +493,11 @@ class Application(object):
         return dict(objects=objects)
 
     def syncclient(self, req):
+        """Responds to ``GET /syncclient.js``
+
+        Returns syncclient.js, with a substitution to point it to this
+        server.
+        """
         if self._syncclient_app:
             mtime = os.path.getmtime(syncclient_filename)
             if mtime > self._syncclient_mtime:
@@ -466,6 +520,11 @@ class Application(object):
         return self._syncclient_app
 
     def verify(self, req):
+        """Responds to ``POST /verify``
+
+        This checks a BrowserID/Persona assertion, and returns
+        information on how to authenticate future requests.
+        """
         try:
             assertion = req.POST['assertion']
             audience = req.POST['audience']
@@ -484,6 +543,11 @@ class Application(object):
         return Response(json=r)
 
     def annotate_auth(self, req):
+        """Adds ``REMOTE_USER`` to ``req.environ``
+
+        Checks for a ``?auth=sig`` to set user.  If REMOTE_USER is
+        already set then this doesn't undo that.
+        """
         auth = req.GET.get('auth')
         if auth:
             sig, data = auth.split('.', 1)
@@ -491,9 +555,21 @@ class Application(object):
                 data = json.loads(data)
                 req.environ['REMOTE_USER'] = data['email'] + '/' + data['audience']
 
+    def delete(self, req, db):
+        """Responds to ``/db-name?delete`` - deletes a database
+        """
+        db.clear()
+        return Response(status=201)
+
     ## Internal/management methods
 
     def copy(self, req, db):
+        """Responds to ``GET /db-name?copy`` - get a dump of the entire database.
+
+        This returns an binary encoded version of the entire database,
+        optionally up until ``?until=count`` (if omitted, then the
+        entire database).  This includes the collection_id.
+        """
         self.assert_is_internal(req)
         if 'until' in req.GET:
             until = int(req.GET['until'])
@@ -506,22 +582,39 @@ class Application(object):
         return resp
 
     def paste(self, req, db):
+        """Responds to ``POST /db-name?paste`` - overwrite the entire database.
+
+        Accepts an encoded database in the body.
+        """
         self.assert_is_internal(req)
         db.decode_db(req.body_file)
         return Response(status=201)
 
     def deprecate(self, req, db):
+        """Responds to ``POST /db-name?deprecate`` - deprecates a single database
+
+        A deprecated database isn't dead, but is filed away and can't
+        be added to.
+        """
         self.assert_is_internal(req)
         if req.method != 'POST':
             return exc.HTTPMethodNotAllowed(allow='POST')
         db.deprecate()
         return Response(status=201)
 
-    def delete(self, req, db):
-        db.clear()
-        return Response(status=201)
-
     def node_added(self, req):
+        """Responds to ``POST /node-added``
+
+        This is called to ask this node to take over from any other
+        nodes, as appropriate.
+
+        Takes a request with the JSON body:
+
+        `other`: list of all nodes.
+        `name`: the name of this node.
+
+        Responds with a text description of what it did.
+        """
         self.assert_is_internal(req)
         status = Response(content_type='text/plain')
         data = req.json
@@ -560,6 +653,20 @@ class Application(object):
         return status
 
     def remove_self(self, req):
+        """Responds to ``POST /remove-self``
+
+        This is a request for this node to gracefully remove itself.
+        It will attempt to back up its data to the other nodes that
+        should take over.
+
+        This takes a request with the JSON data:
+
+        `name`: the name of this node
+        `other`: a list of all nodes (including this)
+        `backups`: the number of backups to make
+
+        It responds with a text description of what it did.
+        """
         self.assert_is_internal(req)
         status = Response(content_type='text/plain')
         self.storage.disable()
@@ -591,6 +698,32 @@ class Application(object):
         return status
 
     def query_deprecate(self, req):
+        """Responds to ``POST /query-deprecate``
+
+        This is used when a new node is added to the system, and all
+        existing nodes are asked for what databases should be assigned
+        to the new node.  Any such database will be deprecated, and a
+        list of those databases is returned.
+
+        Accepts a JSON body with the keys:
+
+        `other`: list of all nodes
+        `name`: the name of this node
+        `new`: the node being added
+        `backups`: the number of backups to keep
+
+        Returns JSON::
+
+            {"deprecated": [deprecated items]}
+
+        Where the deprecated items are::
+
+            {"path": "/domain/user/bucket",
+             "domain": "domain",
+             "username": "user",
+             "bucket": "bucket"
+            }
+        """
         self.assert_is_internal(req)
         data = req.json
         nodes = data['other']
@@ -613,6 +746,21 @@ class Application(object):
         return Response(json={'deprecated': deprecated})
 
     def apply_backup(self, req, db):
+        """Responds to ``POST /db-name?backup-from-pos=N``
+
+        This is the request that is sent when the master node wants to
+        backup a POST request to this backup node.  This is handled
+        similar to a POST request, but the data is kept
+        unconditionally.  When a backup arrives but is ahead of local
+        records, this node will try to catch up with a `?copy` request.
+
+        This has the additional GET parameters of:
+
+        `backup-from-pos`: what the last id was on the master node; if
+        it's ahead of what we have then we need to catch up.
+
+        `source`: the master node.
+        """
         self.assert_is_internal(req)
         backup_pos = int(req.GET['backup-from-pos'])
         source = req.GET['source']
@@ -650,6 +798,24 @@ class Application(object):
         return Response(status=201)
 
     def take_over(self, req):
+        """Attached to ``POST /take-over``
+
+        Takes over databases from another server, that presumably has
+        gone offline without notice.
+
+        This goes through all of the local databases, and sees if this
+        node was either using the bad node as a backup, or is a backup
+        for the bad node.  In either case it finds the new node that
+        should be either master or handling the bad node, and sends
+        the local database to that server.
+
+        Takes a JSON body with keys:
+
+        `other`: a list of all nodes
+        `name`: the name of *this* node
+        `bad`: the bad node being removed
+        `backups`: the number of backups
+        """
         self.assert_is_internal(req)
         status = Response(content_type='text/plain')
         data = req.json
@@ -688,11 +854,13 @@ class Application(object):
 
 
 def b64_encode(s):
+    """Compact/url-safe base64 encoding"""
     import base64
     return base64.urlsafe_b64encode(s).strip('=').strip()
 
 
 def get_secret(filename):
+    """Retrieves the secret from a filename, generating a secret if necessary."""
     if not os.path.exists(filename):
         length = 10
         secret = b64_encode(os.urandom(length))
@@ -705,6 +873,7 @@ def get_secret(filename):
 
 
 def sign(secret, text):
+    """Sign the text using the secret"""
     import hmac
     import hashlib
     return b64_encode(hmac.new(secret, text, hashlib.sha1).digest())
