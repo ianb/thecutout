@@ -47,3 +47,9 @@ When a node is added to or removed from the system the balancer sends a request 
 Right now concurrency is not handled well at several levels of the system.  However, it's not unreasonable to do locking at several levels, and requests can be rejected with no real effect on user experience, so this gives a lot of opportunity to apply fairly widespread locks to protect concurrent access.  Given likely usage scenarios, this should have no effect on normal use.
 
 At several levels diabolic clients could cause problems.
+
+### Data portability
+
+The general pattern I think has some peculiar but positive implications for data portability.  None of this helps you keep data portable on the clients themselves.  That's up to you, though it does require you to implement thoughtful serialization which is always a good first step to portability.
+
+But one interesting note is that the server representation needn't be singular.  You can hook the same application up to multiple sync systems - and specifically, you can upgrade your online object representation by starting to use a sync storage system (aka "bucket") and objects will automatically start to be moved to that old system, while still supporting the old system; and you just remove the adapter for the old system once you feel everything is okay.
