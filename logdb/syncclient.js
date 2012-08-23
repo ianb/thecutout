@@ -148,7 +148,6 @@ Sync._allowOptions = function (args) {
   }
 };
 
-// FIXME: change args to positional arguments
 Sync.Service = function (server, appData, storage) {
   if (this === window || this === Sync) {
     throw 'You forgot new Sync.Service';
@@ -348,7 +347,6 @@ Sync.Service.prototype = {
       return callback && callback({error: "storage hasn't updated syncPosition yet"});
     }
     this.server.get(this._syncPosition, (function (error, results) {
-      // FIXME: check error
       log('Ran GET', {since: this._syncPosition, results: results, error: error});
       if (error) {
         this.sendStatus({error: 'server_get', detail: error});
@@ -368,19 +366,18 @@ Sync.Service.prototype = {
 
   _processUpdates: function (results, callback) {
     if (results.objects.length) {
-      // FIXME: also accept "until" here:
-      this._setSyncPosition(results.objects[results.objects.length-1][0]);
-      // FIXME: Do we care about the callback?
+      var newPosition = results.until || results.objects[results.objects.length-1][0]
+      this._setSyncPosition(newPosition);
       var received = [];
       var seen = {};
-      // FIXME: see should be per-type
       for (var i=results.objects.length-1; i>=0; i--) {
         var o = results.objects[i][1];
-        if (seen.hasOwnProperty(o.id)) {
+        var id = o.id + '||' + o.type;
+        if (seen.hasOwnProperty(id)) {
           continue;
         }
         received.push(o);
-        seen[o.id] = true;
+        seen[id] = true;
       }
       received.reverse();
       var error = null;
@@ -468,8 +465,6 @@ Sync.Service.prototype = {
     }
     this.sendStatus({status: 'sync_put', count: objects.length});
     log('putUpdates', {updates: objects});
-    // FIXME: we *must* include a 'since' key here to protect from
-    // a concurrent update since our last get
     this.server.put(this._syncPosition, objects, (function (error, result) {
       log('server put completed', {error: error, result: result});
       if (error) {
@@ -496,9 +491,9 @@ Sync.Service.prototype = {
         return callback && callback({error: 'No .object_counters received from server', result: result});
       }
       this._setSyncPosition(result.object_counters[result.object_counters.length-1]);
-      // FIXME: do I care about the result of objectsSaved?
-      var error = null;;
+      var error = null;
       try {
+        // FIXME: do I care about the result of objectsSaved?
         this.appData.objectsSaved(objects, Sync.noop);
       } catch (e) {
         // If there's an exception we'll consider the whole thing a bust
@@ -700,7 +695,9 @@ Sync.Server.prototype = {
       throw 'server.setVariables() has not yet been called';
     }
     url += '?since=' + encodeURIComponent(since);
-    // FIXME: add collection_id=
+    if (this._lastSyncCollectionId) {
+      url += '&collection_id=' + encodeURIComponent(this._lastSyncCollectionId);
+    }
     var req = this._createRequest('GET', url);
     req.onreadystatechange = (function () {
       if (req.readyState != 4) {
@@ -727,7 +724,6 @@ Sync.Server.prototype = {
     req.send();
   },
 
-  // FIXME: should have since/lastget here, to protect against concurrent puts
   put: function (since, data, callback) {
     if (! this._authenticator.loggedIn()) {
       throw 'You have not yet logged in';
@@ -739,7 +735,6 @@ Sync.Server.prototype = {
     }
     var url = this._bucketUrl + '?since=' + encodeURIComponent(since);
     var req = this._createRequest('POST', url);
-    // FIXME: add since?
     req.onreadystatechange = (function () {
       if (req.readyState != 4) {
         return;
@@ -833,7 +828,6 @@ Sync.Scheduler = function (service, authenticator) {
 Sync.Scheduler.prototype = {
 
   /* These default settings inform some of the adaptive scheduling */
-  // FIXME: do some adaptive scheduling
   settings: {
     // This is as long as we allow successive backoffs to get:
     maxPeriod: 60*60000, // 1 hour
@@ -1072,7 +1066,6 @@ Sync.PersonaAuthenticator.prototype = {
         throw e;
       }
       if (result.status != "okay") {
-        // FIXME: or this.logout?
         log('Login status not okay:', result);
         this._callOnlogout();
         return;
