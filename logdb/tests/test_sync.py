@@ -20,12 +20,12 @@ class TestSync(TestCase):
         if os.path.exists(test_dir):
             shutil.rmtree(test_dir)
         os.makedirs(test_dir)
-        self.wsgi_app = Application(UserStorage(test_dir, timer=count().next), mock_browserid=True)
+        self.wsgi_app = Application(UserStorage(test_dir, timer=count().next))
         self.app = webtest.TestApp(self.wsgi_app)
         self.auth = None
 
     def url(self, domain='example.com', username='test@example.com', **kw):
-        url = '/%s/%s' % (urllib.quote(domain), urllib.quote(username))
+        url = '/%s/%s/bucket' % (urllib.quote(domain), urllib.quote(username))
         if kw:
             url += '?' + urllib.urlencode(kw)
         return url
@@ -54,12 +54,10 @@ class TestSync(TestCase):
 
     def test_simple(self):
         resp = self.get()
-        assert self.auth.startswith('SyncToken')
-        self.assertEqual(resp.json, dict(collection_id='0', objects=[]))
-        cid = resp.json['collection_id']
-        resp = self.post([dict(id="test", data="whatever"), dict(id="test2", data="whatever")], collection_id=cid)
+        self.assertEqual(resp.json, dict(objects=[]))
+        resp = self.post([dict(id="test", data="whatever"), dict(id="test2", data="whatever")])
         self.assertEqual(resp.json, dict(object_counters=[1, 2]))
-        resp = self.get(collection_id=cid, since=1)
+        resp = self.get(since=1)
         self.assertEqual(resp.json, dict(objects=[[2, dict(data='whatever', id='test2')]]))
-        resp = self.get(collection_id=cid, since=2)
+        resp = self.get(since=2)
         self.assertEqual(resp.json, dict(objects=[]))

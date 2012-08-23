@@ -17,7 +17,9 @@ from webob.dec import wsgify
 from webob import Response, Request
 from webob import exc
 from hash_ring import HashRing
-from logdb import Database, ExpectationFailed
+from fcntl import lockf as lock_file
+from fcntl import LOCK_UN, LOCK_EX
+from logdb import Database, ExpectationFailed, lock_complete
 from logdb import int_encoding
 from logdb.forwarder import forward
 
@@ -65,6 +67,7 @@ class UserStorage(object):
         return os.path.exists(os.path.join(self.dir, 'disabled'))
 
     def disable(self):
+        ## We don't care if multiple people disable this:
         with open(os.path.join(self.dir, 'disabled'), 'wb') as fp:
             fp.write('1')
 
@@ -75,7 +78,12 @@ class Storage(object):
     def __init__(self, dir, timer=time.time):
         self.dir = dir
         if not os.path.exists(dir):
-            os.makedirs(dir)
+            try:
+                os.makedirs(dir)
+            except OSError, e:
+                if e.errno != 17:
+                    raise
+                # Someone created the directory while we were trying to
         self.timer = timer
         self._collection_id = None
 
@@ -85,12 +93,28 @@ class Storage(object):
         if self._collection_id is not None:
             return self._collection_id
         col_filename = os.path.join(self.dir, 'collection_id.txt')
-        if not os.path.exists(col_filename):
-            collection_id = '%06i' % (int(self.timer() * 100) % (10 ** 6))
-            self.set_collection_id(collection_id)
-        else:
-            with open(col_filename, 'rb') as fp:
-                collection_id = fp.read()
+        fp = None
+        try:
+            fp = open(col_filename, 'rb')
+        except IOError, e:
+            if e.errno != 2:
+                raise
+        if fp is None:
+            try:
+                fd = os.open(col_filename, os.O_RDWR | os.O_CREAT | os.O_EXCL)
+            except IOError, e:
+                if e.errno != 17:
+                    raise
+                # Someone created it while we were tryig to create it
+                fp = open(col_filename, 'rb')
+            else:
+                fp = os.fdopen(fd, 'wb')
+                collection_id = '%06i' % (int(self.timer() * 100) % (10 ** 6))
+                fp.write(collection_id)
+                self._collection_id = collection_id
+                return collection_id
+        collection_id = fp.read()
+        fp.close()
         self._collection_id = collection_id
         return collection_id
 
@@ -152,6 +176,8 @@ class Storage(object):
                  or os.path.getsize(os.path.join(self.dir, 'database.index')) == 12))
 
     def set_collection_id(self, collection_id):
+        ## FIXME: This might have race conditions?
+        ## Also other consumers won't see the update
         col_filename = os.path.join(self.dir, 'collection_id.txt')
         with open(col_filename, 'wb') as fp:
             fp.write(collection_id)
@@ -162,8 +188,15 @@ class Storage(object):
         if self.is_deprecated:
             return
         db_name = os.path.join(self.dir, 'database')
-        os.rename(db_name, os.path.join(self.dir, 'deprecated'))
-        os.rename(db_name + '.index', os.path.join(self.dir, 'deprecated.index'))
+        fp = open(db_name + '.index', 'r+b')
+        with lock_complete(fp):
+            ## FIXME: anyone holding the database open will still be able to write to it
+            ## Maybe copy and truncate the database?
+            ## FIXME: also this could fail if deprecated also exists, which is kind
+            ## of okay, but should be caught more formally
+            os.rename(db_name, os.path.join(self.dir, 'deprecated'))
+            os.rename(db_name + '.index', os.path.join(self.dir, 'deprecated.index'))
+        fp.close()
 
     def encode_db(self, until=None):
         """Returns an iterator that yields the encoded database, for
@@ -184,25 +217,35 @@ class Storage(object):
         (length,) = int_encoding.unpack(fp.read(4))
         collection_id = fp.read(length)
         col_filename = os.path.join(self.dir, 'new_collection_id.txt')
-        with open(col_filename, 'wb') as col_fp:
+        col_fp = open_create(col_filename)
+        try:
             col_fp.write(collection_id)
+        finally:
+            col_fp.close()
         (length,) = int_encoding.unpack(fp.read(4))
         db_name = os.path.join(self.dir, 'new_database')
-        ## FIXME: should lock queues here
         queue_filename = os.path.join(self.dir, 'queue')
-        with open(db_name + '.index', 'wb') as new_fp:
+        queue_index_fp = None
+        if os.path.exists(queue_filename + '.index'):
+            queue_index_fp = open(queue_filename + '.index', 'rb')
+            lock_file(queue_index_fp, LOCK_EX, 0, 0, os.SEEK_SET)
+        new_fp = open_create(db_name + '.index')
+        try:
             self._copy_chunked(fp, new_fp, length)
-            if append_queue and os.path.exists(queue_filename + '.index'):
-                with open(queue_filename + '.index', 'rb') as copy_fp:
-                    ## FIXME: chunk
-                    new_fp.write(copy_fp.read())
+            if queue_index_fp is not None:
+                new_fp.write(queue_index_fp.read())
+        finally:
+            new_fp.close()
         (length,) = int_encoding.unpack(fp.read(4))
-        with open(db_name, 'wb') as new_fp:
+        new_fp = open_create(db_name)
+        try:
             self._copy_chunked(fp, new_fp, length)
             if append_queue and os.path.exists(queue_filename):
                 with open(queue_filename, 'rb') as copy_fp:
                     ## FIXME: chunk
                     new_fp.write(copy_fp.read())
+        finally:
+            new_fp.close()
         for name in 'new_collection_id.txt', 'new_database.index', 'new_database':
             os.rename(os.path.join(self.dir, name),
                       os.path.join(self.dir, name[4:]))
@@ -212,6 +255,8 @@ class Storage(object):
                 name = os.path.join(self.dir, name)
                 if os.path.exists(name):
                     os.unlink(name)
+        if queue_index_fp is not None:
+            lock_file(queue_index_fp, LOCK_UN, 0, 0, os.SEEK_SET)
 
     def _copy_chunked(self, old, new, length, chunk=4000 * 1024):
         while length > 0:
@@ -415,6 +460,7 @@ class Application(object):
         counter = None
         last_pos = db.db.length()
         try:
+            print 'extending', data_encoded, db.dir
             counter = db.db.extend(data_encoded, expect_latest=since)
         except ExpectationFailed:
             pass
@@ -908,3 +954,10 @@ def sign(secret, text):
     import hmac
     import hashlib
     return b64_encode(hmac.new(secret, text, hashlib.sha1).digest())
+
+
+def open_create(filename):
+    """Opens the file, but we must be the one that created the file"""
+    fd = os.open(filename, os.O_RDWR | os.O_CREAT | os.O_EXCL)
+    fp = os.fdopen(fd, 'wb')
+    return fp

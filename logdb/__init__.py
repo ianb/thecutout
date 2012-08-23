@@ -3,12 +3,17 @@ import shutil
 from fcntl import lockf as lock_file
 from fcntl import LOCK_UN, LOCK_EX
 import struct
+from contextlib import contextmanager
 
 int_encoding = struct.Struct('<I')
 triple_encoding = struct.Struct('<III')
 
 
 class ExpectationFailed(Exception):
+    pass
+
+
+class TruncatedFile(Exception):
     pass
 
 
@@ -19,19 +24,36 @@ class Database(object):
             index_filename = data_filename + '.index'
         self.index_filename = index_filename
         self.data_filename = data_filename
-        if not os.path.exists(data_filename):
-            self.data_fp = open(data_filename, 'w+b')
-            self.index_fp = open(index_filename, 'w+b')
-            # Write a dummy record
-            self.index_fp.write(triple_encoding.pack(0, 0, 0))
-        else:
-            self.data_fp = open(data_filename, 'r+b')
+        try:
             self.index_fp = open(index_filename, 'r+b')
+        except IOError, e:
+            if e.errno != 2:
+                raise
+            ## File does not exist
+            try:
+                fd = os.open(index_filename, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_EXLOCK)
+            except IOError, e:
+                if e.errno != 17:
+                    raise
+                ## File was created while we were trying to create it, which is fine
+                self.index_fp = open(index_filename, 'r+b')
+            else:
+                self.index_fp = os.fdopen(fd, 'r+b')
+                self.index_fp.write(triple_encoding.pack(0, 0, 0))
+                lock_file(self.index_fp, LOCK_UN, 0, 0, os.SEEK_SET)
+        fd = os.open(data_filename, os.O_RDWR | os.O_CREAT)
+        self.data_fp = os.fdopen(fd, 'r+b')
 
     def _read_last_count(self):
         """Reads the counter of the last item appended"""
         self.index_fp.seek(-4, os.SEEK_END)
-        return int_encoding.unpack(self.index_fp.read(4))[0]
+        if self.index_fp.tell() % 4:
+            raise Exception("Misaligned length of index file %s" % self.index_filename)
+        chunk = self.index_fp.read(4)
+        if not chunk:
+            # The file has been truncated, there's not even the 0/0/0 record
+            raise TruncatedFile()
+        return int_encoding.unpack(chunk)[0]
 
     def _seek_index(self, seek_count):
         """Seeks the index file to immediately *after* seek_count.
@@ -48,7 +70,10 @@ class Database(object):
         least = 0
         greatest = last_pos
         while 1:
-            count, = int_encoding.unpack(self.index_fp.read(4))
+            chunk = self.index_fp.read(4)
+            if len(chunk) < 4:
+                return
+            count, = int_encoding.unpack(chunk)
             if count == seek_count:
                 return
             if seek_count > count:
@@ -61,7 +86,7 @@ class Database(object):
                 # we're okay)
                 if greatest != guess:
                     # We're not at the right place yet
-                    os.seek(greatest * 12)
+                    self.index_fp.seek(greatest * 12)
                 return
             diff = seek_count - count
             self.index_fp.seek(diff * 12 - 4, os.SEEK_CUR)
@@ -71,8 +96,7 @@ class Database(object):
         """Appends the data to the database, returning the integer
         counter for the first item in the data
         """
-        lock_file(self.index_fp, LOCK_EX)
-        try:
+        with lock_append(self.index_fp):
             count = self._read_last_count()
             if expect_latest is not None and count > expect_latest:
                 raise ExpectationFailed
@@ -97,8 +121,6 @@ class Database(object):
                 self.index_fp.write(triple_encoding.pack(length, pos, count))
                 pos += length
             return first_datas
-        finally:
-            lock_file(self.index_fp, LOCK_UN)
 
     def read(self, above, last=-1):
         """Yields items starting at `above` and until (and including)
@@ -109,7 +131,7 @@ class Database(object):
         last_pos = None
         while 1:
             chunk = self.index_fp.read(12)
-            if not chunk:
+            if not chunk or len(chunk) < 12:
                 break
             length, pos, count = triple_encoding.unpack(chunk)
             assert count > above, "failed: count=%r > above=%r; chunk=%r; tell=%r; trip=%r" % (count, above, chunk, self.index_fp.tell(), [length, pos, count, self.index_filename, self.index_fp.seek(0) or self.index_fp.read(), self.data_fp.seek(0) or self.data_fp.read()])
@@ -120,7 +142,10 @@ class Database(object):
                 # We should be reading forward, so this should be correct
                 assert last_pos == pos
             data = self.data_fp.read(length)
-            assert len(data) == length
+            if len(data) < length:
+                # Truncated record, we caught someone in the process of reading
+                # But this must be the last complete record
+                break
             last_pos += length
             yield count, data
             if last > 0 and last <= count:
@@ -134,6 +159,7 @@ class Database(object):
         This can be used to establish a chunk of the database that
         represents a range."""
         if until is None:
+            ## FIXME: Or should I seek and tell?  Could they be different?
             return (os.path.getsize(self.index_filename),
                     os.path.getsize(self.data_filename))
         self._seek_index(until)
@@ -146,11 +172,14 @@ class Database(object):
         return (index_pos, pos)
 
     def clear(self):
-        self.data_fp.close()
-        self.index_fp.close()
-        self.data_fp = open(self.data_filename, 'w+b')
-        self.index_fp = open(self.index_filename, 'w+b')
-        self.index_fp.write(triple_encoding.pack(0, 0, 0))
+        ## FIXME: not sure the concurrency effect is here.  It's not
+        ## intended to be concurrent really.  Could mostly do weird things
+        ## to readers.
+        with lock_complete(self.index_fp):
+            self.index_fp.seek(12, os.SEEK_SET)
+            self.index_fp.truncate()
+            self.data_fp.seek(0, os.SEEK_SET)
+            self.data_fp.truncate()
 
     def length(self):
         return self._read_last_count()
@@ -192,18 +221,22 @@ class Database(object):
 
     def overwrite(self, data_filename, index_filename):
         """Overwrites this database with the given files"""
-        lock_file(self.index_fp, LOCK_EX)
-        self.index_fp.seek(0)
-        # First make sure no one can do anything:
-        self.index_fp.truncate()
-        self.data_fp.close()
-        os.unlink(self.data_filename)
-        os.rename(data_filename, self.data_filename)
-        self.data_fp = open(self.data_filename, 'r+b')
-        fp = open(index_filename, 'rb')
-        shutil.copyfile(fp, self.index_fp)
-        fp.close()
-        os.unlink(index_filename)
+        with lock_complete(self.index_fp):
+            self.index_fp.seek(0)
+            # First make sure no one can do anything:
+            self.index_fp.truncate()
+            self.data_fp.seek(0)
+            self.data_fp.truncate()
+            ## FIXME: should I truncate (or re-truncate) them large,
+            ## to pre-allocate space?  Readers would currently get
+            ## confused.
+            with open(index_filename, 'rb') as fp:
+                shutil.copyfile(fp, self.index_fp)
+            with open(data_filename, 'rb') as fp:
+                shutil.copyfile(fp, self.data_fp)
+            ## FIXME: should I use any renames?
+            ## I could truncate the old files to invalidate them, then
+            ## rename both?
 
     def delete(self):
         self.close()
@@ -213,3 +246,17 @@ class Database(object):
     def close(self):
         self.index_fp.close()
         self.data_fp.close()
+
+
+@contextmanager
+def lock_append(fp):
+    lock_file(fp, LOCK_EX, 0, 0, os.SEEK_END)
+    yield
+    lock_file(fp, LOCK_UN, 0, 0, os.SEEK_END)
+
+
+@contextmanager
+def lock_complete(fp):
+    lock_file(fp, LOCK_EX, 0, 0, os.SEEK_SET)
+    yield
+    lock_file(fp, LOCK_UN, 0, 0, os.SEEK_SET)
