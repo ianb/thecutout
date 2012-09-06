@@ -1,0 +1,29 @@
+body {
+    font-family: sans-serif;
+}
+
+div {
+    margin-bottom: 1em;
+}
+
+#dropper {
+    text-align: center;
+}
+
+#share-drop {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+    height: 2em;
+    padding-top: 1em;
+    border: 2px dashed #666;
+    border-radius: 1em;
+}
+
+#share-file-upload {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+    border: 2px solid #666;
+    border-radius: 1em;
+}
