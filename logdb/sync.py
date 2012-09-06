@@ -3,11 +3,13 @@
 This does not include routing and balancing, but does include the
 actual database handling."""
 
+import re
 import os
 import shutil
 import time
 import urllib
 import urlparse
+import base64
 from cStringIO import StringIO
 try:
     import simplejson as json
@@ -16,6 +18,7 @@ except ImportError:
 from webob.dec import wsgify
 from webob import Response, Request
 from webob import exc
+from webob.static import FileApp
 from hash_ring import HashRing
 from fcntl import lockf as lock_file
 from fcntl import LOCK_UN, LOCK_EX
@@ -77,15 +80,10 @@ class Storage(object):
 
     def __init__(self, dir, timer=time.time):
         self.dir = dir
-        if not os.path.exists(dir):
-            try:
-                os.makedirs(dir)
-            except OSError, e:
-                if e.errno != 17:
-                    raise
-                # Someone created the directory while we were trying to
+        ensure_dir(dir)
         self.timer = timer
         self._collection_id = None
+        self._collection_secret = None
 
     @property
     def collection_id(self):
@@ -93,30 +91,24 @@ class Storage(object):
         if self._collection_id is not None:
             return self._collection_id
         col_filename = os.path.join(self.dir, 'collection_id.txt')
-        fp = None
-        try:
-            fp = open(col_filename, 'rb')
-        except IOError, e:
-            if e.errno != 2:
-                raise
-        if fp is None:
-            try:
-                fd = os.open(col_filename, os.O_RDWR | os.O_CREAT | os.O_EXCL)
-            except IOError, e:
-                if e.errno != 17:
-                    raise
-                # Someone created it while we were tryig to create it
-                fp = open(col_filename, 'rb')
-            else:
-                fp = os.fdopen(fd, 'wb')
-                collection_id = '%06i' % (int(self.timer() * 100) % (10 ** 6))
-                fp.write(collection_id)
-                self._collection_id = collection_id
-                return collection_id
-        collection_id = fp.read()
-        fp.close()
-        self._collection_id = collection_id
-        return collection_id
+
+        def creator():
+            return '%06i' % (int(self.timer() * 100) % (10 ** 6))
+
+        self._collection_id = read_unique(col_filename, creator)
+        return self._collection_id
+
+    @property
+    def collection_secret(self):
+        if self._collection_secret is not None:
+            return self._collection_secret
+        col_filename = os.path.join(self.dir, 'collection_secret.txt')
+
+        def creator():
+            return os.urandom(20)
+
+        self._collection_secret = read_unique(col_filename, creator)
+        return self._collection_secret
 
     @property
     def has_collection_id(self):
@@ -202,12 +194,14 @@ class Storage(object):
         """Returns an iterator that yields the encoded database, for
         use with ``?copy/?paste``"""
         collection_id = self.collection_id.encode('ascii')
+        collection_secret = self.collection_secret
         if self.is_deprecated:
             db = self.deprecated_db
         else:
             db = self.db
         index_pos, data_pos = db.get_file_positions(until)
         return EncodedIterator(collection_id,
+                               collection_secret,
                                db.index_filename, index_pos,
                                db.data_filename, data_pos)
 
@@ -220,6 +214,14 @@ class Storage(object):
         col_fp = open_create(col_filename)
         try:
             col_fp.write(collection_id)
+        finally:
+            col_fp.close()
+        (length,) = int_encoding.unpack(fp.read(4))
+        collection_secret = fp.read(length)
+        col_filename = os.path.join(self.dir, 'new_collection_secret.txt')
+        col_fp = open_create(col_filename)
+        try:
+            col_fp.write(collection_secret)
         finally:
             col_fp.close()
         (length,) = int_encoding.unpack(fp.read(4))
@@ -246,7 +248,7 @@ class Storage(object):
                     new_fp.write(copy_fp.read())
         finally:
             new_fp.close()
-        for name in 'new_collection_id.txt', 'new_database.index', 'new_database':
+        for name in 'new_collection_id.txt', 'new_collection_secret.txt', 'new_database.index', 'new_database':
             os.rename(os.path.join(self.dir, name),
                       os.path.join(self.dir, name[4:]))
         if append_queue:
@@ -264,12 +266,70 @@ class Storage(object):
             length -= len(chunk)
             new.write(chunk)
 
+    def save_blob(self, name, content_type, data):
+        """Saves a blob"""
+        dir = os.path.join(self.dir, 'blobs')
+        ensure_dir(dir)
+        # I believe this is safe from concurrent access, because there
+        # can't be more than one writer.  But I'm not sure.  FIXME
+        content_type_name = os.path.join(dir, name + '.content-type')
+        blob_name = os.path.join(dir, name)
+        try:
+            fp = open(content_type_name, 'wb')
+            with lock_complete(fp):
+                fp.write(content_type)
+                blob_fp = open(blob_name, 'wb')
+                try:
+                    blob_fp.write(data)
+                finally:
+                    blob_fp.close()
+        finally:
+            fp.close()
+
+    def get_blob_name(self, record_type, record_id):
+        hash_text = (record_type or '') + '\000' + record_id
+        return sign(self.collection_secret, hash_text)
+
+    def get_blob_data(self, name):
+        """Returns (content_type, filename) if the file exists, or
+        (None, None) if not"""
+        base = os.path.join(self.dir, 'blobs', name)
+        if os.path.exists(base):
+            with open(base + '.content-type', 'rb') as fp:
+                content_type = fp.read()
+            return content_type, base
+        return None, None
+
+    def maybe_delete_blob(self, record_type, record_id):
+        name = self.get_blob_name(record_type, record_id)
+        base = os.path.join(self.dir, 'blobs', name)
+        if base:
+            ## FIXME: this isn't exactly atomic.  Lock on
+            ## content-type?  I've encountered situations where the
+            ## blob was written, but .content-type was not; not sure
+            ## why.  Ignoring for now, but maybe should warn?  Also
+            ## ignoring errors protects against concurrent access,
+            ## though another process could maybe write a new blob
+            ## while we're deleting?  Lock the entire index?
+            try:
+                os.unlink(base + '.content-type')
+            except OSError, e:
+                if e.errno != 2:
+                    # Not found is okay
+                    raise
+            try:
+                os.unlink(base)
+            except OSError, e:
+                if e.errno != 2:
+                    raise
+
 
 class EncodedIterator(object):
     """An iterator for the result of db.encode_db()"""
 
-    def __init__(self, collection_id, index_name, index_length, db_name, db_length, chunk=4000 * 1024):
+    def __init__(self, collection_id, collection_secret, index_name, index_length, db_name, db_length, chunk=4000 * 1024):
         self.collection_id = collection_id
+        self.collection_secret = collection_secret
         self.db_name = db_name
         self.db_length = db_length
         self.index_name = index_name
@@ -283,6 +343,8 @@ class EncodedIterator(object):
     def __iter__(self):
         yield int_encoding.pack(len(self.collection_id))
         yield self.collection_id
+        yield int_encoding.pack(len(self.collection_secret))
+        yield self.collection_secret
         yield int_encoding.pack(self.index_length)
         left = self.index_length
         with open(self.index_name, 'rb') as fp:
@@ -375,6 +437,10 @@ class Application(object):
         assert domain == req.path_info_pop()
         username = req.path_info_pop()
         bucket = req.path_info
+        static_path = None
+        if '/+static' in bucket:
+            bucket, static_path = bucket.split('/+static', 1)
+            static_path = static_path.lstrip('/')
         req.script_name, req.path_info = script_name, path_info
         if domain is None or username is None or not bucket:
             return exc.HTTPNotFound('Not a valid URL: %r' % path_info)
@@ -403,6 +469,8 @@ class Application(object):
             return Response(status=503, retry_after=60, body='Data in transit')
         if self.storage.is_disabled:
             return Response(status=503, retry_after=60, body='Server in process of retiring')
+        if static_path:
+            return self.static(req, db, static_path)
         collection_id = req.GET.get('collection_id')
         if collection_id is not None and collection_id != db.collection_id:
             req.GET.since = '0'
@@ -420,6 +488,26 @@ class Application(object):
             resp_data = json.dumps(resp_data, separators=(',', ':'))
         resp = Response(resp_data, content_type='application/json')
         return resp
+
+    static_re = re.compile(r'^[a-zA-Z0-9_-]+$')
+
+    filename_re = re.compile(r'[^a-zA-Z0-9_\-. ]')
+
+    def static(self, req, db, static_path):
+        if not self.static_re.match(static_path):
+            return Response(status=404, body='Bad path')
+        content_type, filename = db.get_blob_data(static_path)
+        if not filename:
+            return Response(status=404, body='No such static file')
+        kw = {}
+        if 'filename' in req.GET:
+            download = req.GET['filename']
+            download = download.split('/')[-1]
+            download = download.split('\\')[-1]
+            download = self.filename_re.sub('', filename)
+            ## FIXME: maybe I should check the extension against the declared type?
+            kw['headers'] = {'Content-Disposition': 'attachment; filename="%s"' % download}
+        return req.send(FileApp(filename, content_type=content_type, **kw))
 
     def access_for_domain(self, domain):
         if '//' in domain:
@@ -455,12 +543,36 @@ class Application(object):
             data = req.json
         except ValueError:
             raise exc.HTTPBadRequest('POST must have valid JSON body')
+        blobs = []
+        for item in data:
+            if item.get('blob') and item['blob'].get('data'):
+                name = db.get_blob_name(item.get('type'), item['id'])
+                content_type = item['blob']['content_type']
+                content = item['blob']['data']
+                # This makes us tolerant of URL-base64, and no padding characters
+                # but still allows normal base64:
+                content = content + '=' * (4 - len(data) % 4)
+                content = content.replace('-', '+')
+                content = content.replace('_', '/')
+                content = base64.b64decode(content)
+                ## FIXME: this should be the balancer href, not the local href:
+                item['blob']['href'] = req.path_url + '/+static/' + name
+                blob_item = {
+                    'id': item['id'],
+                    'name': name,
+                    'href': item['blob']['href'],
+                    'content_type': content_type,
+                    'data': content,
+                    }
+                if item.get('type'):
+                    blob_item['type'] = item['type']
+                blobs.append(blob_item)
+                del item['blob']['data']
         data_encoded = [json.dumps(i) for i in data]
         since = int(req.GET.get('since', 0))
         counter = None
         last_pos = db.db.length()
         try:
-            print 'extending', data_encoded, db.dir
             counter = db.db.extend(data_encoded, expect_latest=since)
         except ExpectationFailed:
             pass
@@ -497,7 +609,20 @@ class Application(object):
                        if name.strip()]
             for backup in backups:
                 self.post_backup(req, db, backup, last_pos)
-        return dict(object_counters=counters)
+        resp = dict(object_counters=counters)
+        if blobs:
+            for blob_item in blobs:
+                db.save_blob(blob_item['name'],
+                             blob_item['content_type'],
+                             blob_item['data'])
+                del blob_item['name']
+                del blob_item['content_type']
+                del blob_item['data']
+            resp['blobs'] = blobs
+        for item in data:
+            if item.get('deleted'):
+                db.maybe_delete_blob(item.get('type'), item['id'])
+        return resp
 
     def post_backup(self, req, db, backup, last_pos):
         """Handles backups from a POST request.
@@ -645,7 +770,7 @@ class Application(object):
 
         This returns an binary encoded version of the entire database,
         optionally up until ``?until=count`` (if omitted, then the
-        entire database).  This includes the collection_id.
+        entire database).  This includes the collection_id/secret.
         """
         self.assert_is_internal(req)
         if 'until' in req.GET:
@@ -663,6 +788,7 @@ class Application(object):
 
         Accepts an encoded database in the body.
         """
+        ## FIXME: have to copy blobs over too
         self.assert_is_internal(req)
         db.decode_db(req.body_file)
         return Response(status=201)
@@ -938,15 +1064,10 @@ def b64_encode(s):
 
 def get_secret(filename):
     """Retrieves the secret from a filename, generating a secret if necessary."""
-    if not os.path.exists(filename):
+    def creator():
         length = 10
-        secret = b64_encode(os.urandom(length))
-        with open(filename, 'wb') as fp:
-            fp.write(secret)
-    else:
-        with open(filename, 'rb') as fp:
-            secret = fp.read()
-    return secret
+        return b64_encode(os.urandom(length))
+    return read_unique(filename, creator)
 
 
 def sign(secret, text):
@@ -961,3 +1082,42 @@ def open_create(filename):
     fd = os.open(filename, os.O_RDWR | os.O_CREAT | os.O_EXCL)
     fp = os.fdopen(fd, 'wb')
     return fp
+
+
+def read_unique(filename, creator):
+    """Reads the file given; if the file does not exist then calls
+    creator() to get the value for the file and writes it.  This is
+    very careful with locking."""
+    fp = None
+    try:
+        fp = open(filename, 'rb')
+    except IOError, e:
+        if e.errno != 2:
+            raise
+    if fp is None:
+        value = creator()
+        assert isinstance(value, str)
+        try:
+            fd = os.open(filename, os.O_RDWR | os.O_CREAT | os.O_EXCL)
+        except IOError, e:
+            if e.errno != 17:
+                raise
+            fp = open(filename, 'rb')
+        else:
+            fp = os.fdopen(fd, 'wb')
+            fp.write(value)
+            fp.close()
+            return value
+    value = fp.read()
+    fp.close()
+    return value
+
+
+def ensure_dir(dir):
+    """Ensures the directory exists"""
+    if not os.path.exists(dir):
+        try:
+            os.makedirs(dir)
+        except OSError, e:
+            if e.errno != 17:
+                raise

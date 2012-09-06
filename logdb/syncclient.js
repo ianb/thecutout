@@ -290,8 +290,8 @@ Sync.Service.prototype = {
       }
       if (error && (! error.collection_deleted)) {
         log('getUpdates error/terminating', {error: error});
-        logGroupEnd();
         this.sendStatus({error: 'sync_get', detail: error});
+        logGroupEnd();
         return callback && callback(error);
       }
       this.sendStatus({status: 'sync_get'});
@@ -309,13 +309,21 @@ Sync.Service.prototype = {
         return;
       }
       this._putUpdates((function (error) {
-        log('finished syncNow', {error: error});
+        var err = null;
+        if (error && error.length) {
+          err = error.map(function (e) {
+            if (e.error && e.object) {
+              return e.error + ' for object id: ' + JSON.stringify(e.object.id);
+            }
+            return e;
+          });
+        }
+        log('finished syncNow', {error: err});
         logGroupEnd();
         return callback && callback(error);
       }).bind(this));
     }).bind(this));
   },
-
 
   /* Deletes the server-side collection, not affecting anything local
      The reason is stored on the server. */
@@ -367,7 +375,6 @@ Sync.Service.prototype = {
   _processUpdates: function (results, callback) {
     if (results.objects.length) {
       var newPosition = results.until || results.objects[results.objects.length-1][0]
-      this._setSyncPosition(newPosition);
       var received = [];
       var seen = {};
       for (var i=results.objects.length-1; i>=0; i--) {
@@ -387,6 +394,7 @@ Sync.Service.prototype = {
         error = e;
       }
       if (error === null) {
+        this._setSyncPosition(newPosition);
         this._setLastSyncTime(Date.now());
         if (results.incomplete) {
           log('Refetching next batch');
@@ -420,20 +428,26 @@ Sync.Service.prototype = {
 
   _validateObjects: function(objects) {
     var errors = [];
-    var allowedProps = ['type', 'id', 'expires', 'data', 'deleted'];
+    var allowedProps = ['type', 'id', 'expires', 'data', 'deleted', 'blob'];
     for (var i=0; i<objects.length; i++) {
       var object = objects[i];
       if (! object.id) {
         errors.push({object: object, error: 'No .id property'});
       }
+
       if ('deleted' in object && object.deleted !== true) {
         errors.push({object: object, error: 'deleted property may only be true, or else shoudl be uset'});
       }
+
       if (object.deleted) {
         if ('data' in object) {
           errors.push({object: object, error: 'A deleted object cannot contain a .data property'});
         }
+        if ('blob' in object) {
+          errors.push({object: object, error: 'A deleted object cannot contain a .data property'});
+        }
       }
+
       for (var prop in object) {
         if (! object.hasOwnProperty(prop)) {
           continue;
@@ -442,6 +456,24 @@ Sync.Service.prototype = {
           errors.push({object: object, error: 'Object has property that is not allowed: ' + prop});
         }
       }
+
+      if (object.blob) {
+        for (var prop in object.blob) {
+          if (! object.hasOwnProperty(prop)) {
+            continue;
+          }
+          if (['href', 'data', 'content_type'].indexOf(prop) == -1) {
+            errors.push({object: object, error: 'Object .blob has property that is not allowed: ' + prop});
+          }
+        }
+        if ((! object.blob.href) && (! object.blob.data)) {
+          errors.push({object: object, error: 'Object .blob must have a .blob.data or .blob.href property'});
+        }
+        if (! object.blob.content_type) {
+          errors.push({object: object, error: 'Object .blob must have a .blob.content_type property'});
+        }
+      }
+
     }
     if (! errors.length) {
       errors = null;
@@ -459,7 +491,13 @@ Sync.Service.prototype = {
       if (this.appData.reportObjectErrors) {
         this.appData.reportObjectErrors(errors);
       } else {
-        log('Objects have errors:', errors);
+        var err = errors.map(function (e) {
+          if (e.error && e.object) {
+            return e.error + ' for object id: ' + e.object.id;
+          }
+          return e;
+        });
+        log('Objects have errors:', err);
       }
       return callback && callback({error: 'Objects have errors', detail: errors});
     }
@@ -492,6 +530,18 @@ Sync.Service.prototype = {
       }
       this._setSyncPosition(result.object_counters[result.object_counters.length-1]);
       var error = null;
+      if (result.blobs) {
+        var objectsById = {};
+        for (var i=0; i<objects.length; i++) {
+          var o = objects[i];
+          objectsById[(o.type || '') + '\000' + o.id] = o;
+        }
+        for (var i=0; i<result.blobs.length; i++) {
+          var blob = result.blobs[i];
+          var o = objectsById[(blob.type || '') + '\000' + blob.id];
+          o.blob.href = blob.href;
+        }
+      }
       try {
         // FIXME: do I care about the result of objectsSaved?
         this.appData.objectsSaved(objects, Sync.noop);
