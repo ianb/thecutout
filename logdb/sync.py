@@ -383,7 +383,6 @@ class Application(object):
 
     def is_internal(self, req):
         ## FIXME: do actual authentication
-        return True
         return req.environ.get('logdb.internal')
 
     def assert_is_internal(self, req):
@@ -507,6 +506,8 @@ class Application(object):
             download = self.filename_re.sub('', filename)
             ## FIXME: maybe I should check the extension against the declared type?
             kw['headers'] = {'Content-Disposition': 'attachment; filename="%s"' % download}
+        ## FIXME: text/html content introduces a security hole
+        ## Really all static content needs to be on another origin
         return req.send(FileApp(filename, content_type=content_type, **kw))
 
     def access_for_domain(self, domain):
@@ -545,6 +546,10 @@ class Application(object):
             raise exc.HTTPBadRequest('POST must have valid JSON body')
         blobs = []
         for item in data:
+            ## FIXME: I should verify any blob.href's the body, to
+            ## make sure the URL isn't being inappropriately modified.
+            ## Maybe if neither data nor href are present I should
+            ## confirm that a blob exists, and pass back the href?
             if item.get('blob') and item['blob'].get('data'):
                 name = db.get_blob_name(item.get('type'), item['id'])
                 content_type = item['blob']['content_type']
