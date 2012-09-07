@@ -49,7 +49,7 @@
         <code class="filename"><%- filename %></code> <%- formatSize(size) %>
         <% if (href) { %>
         <!-- FIXME: should quote filename -->
-          <a download="<%- filename %>" href="<%- href %>?filename=<%- filename %>">download</a>
+          <a download="<%- filename %>" href="<%- downloadHref %>">download</a>
         <% } %>
       </li>
     </script>

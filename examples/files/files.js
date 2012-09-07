@@ -118,7 +118,7 @@ function ready(name) {
 }
 
 function shareFile(file) {
-  var result = fileTemplate({filename: file.name || file.filename, type: file.type, size: file.size, href: file.href});
+  var result = fileTemplate({filename: file.name || file.filename, type: file.type, size: file.size, href: file.href, downloadHref: sync.authenticateUrl(file.href) + '&download=' + encodeURIComponent(file.name)});
   result = $(result);
   $('#null-share').remove();
   $('#share-list').append(result);

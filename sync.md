@@ -116,6 +116,8 @@ This method indicates that the objects (as returned from `getPendingObjects` hav
 
 Note that attempts to upload objects can fail, so the results of `getPendingObjects` may be discarded and retrieved later for another attempt.  Typically such a case will result in a sequence of getPendingObjects, objectsReceived, getPendingObjects again, and finally objectsSaved.
 
+Note if you use blobs, you should check for the `href` of the object, which will have been set after saving.  You can still keep the source of the blob around if you want, or remove it and rely on the remote/linked blob.
+
 #### `appData.objectsReceived(objects)`
 
 This happens when a new object has appeared on the server.  The objects are formatted just as above, and probably came from another instance of your application.
@@ -168,6 +170,7 @@ The object returned as some methods:
 
 `reset(callback)`: forgets all information about synchronization. This doesn't get rid of anything on the server, but does cause the next sync to start from scratch.
 
+`authentiateUrl(url)`: takes a URL (for a `blob.href`) and adds authenticating information to it.
 
 ## Protocol
 
@@ -364,8 +367,58 @@ The POST results, when successful, also update `since`.  And the POST results wh
 
 Sometimes you may not understand an object you receive; its type, or the format it is in.  This might be because of corruption, but it might also be because another client has a newer/richer notion of the type than you do.
 
+### Blobs
+
+Sometimes you will want to store large amount of data with an object, for instance an image.
+
+You could keep the image (encoded in some fashion, perhaps as a `data:` URL) stored in the objects themselves.  The problem is that clients *must* download all objects, and so the update process would requiring downloading the whole image, and would require downloading it during what might otherwise be a simple update, or before adding objects.  The sync model essentially keeps you from doing lazy fetching - something which is usually okay, but not always.
+
+Instead of storing the object directly in the storage, you can POST an update with the complete blob (in addition to any metadata associated with that blob) and the blob will be stored at a separate URL.  This blob will be managed alongside the object (i.e., updated and deleted with the object).
+
+To do this, use an object like:
+
+```javascript
+{
+  type: "image",
+  id: "pic1",
+  data: {
+    "description": "A picture of me and Jim"
+  },
+  blob: {
+    content_type: "image/jpeg",
+    data: "base64 encoded image"
+  }
+}
+```
+
+When `AppData.objectsSaved()` is called you'll get back something like:
+
+```javascript
+{
+  type: "image",
+  id: "pic1",
+  data: {
+    "description": "A picture of me and Jim"
+  },
+  blob: {
+    content_type: "image/jpeg",
+    href: "http://storage/sync/domain/user/+static/4jD19Fde-D134"
+  }
+}
+```
+
+The URL will still be protected by authentication.  To use the URL you must do `url = sync.authenticateUrl(object.blob.href)`
+
+If you make an update you can (and must!) keep the `blob: {content_type: ..., href: ...}` portion of the object; however, you do not need to upload new blob data with each update.
+
+Note the URL will be controlled by CORS headers, so you can access its content with an XMLHttpRequest.
+
 ## To Do
 
-* Add storage where large blobs can be lazily stored, URL-addressable, collected when the item is deleted.
-
 * Implement periodic garbage collection
+
+* Move static file hosting to another domain (though that's more of a deployment concern).
+
+* Allow public blobs
+
+* Allow first sync to go from most-recent to oldest, instead of the other way around
