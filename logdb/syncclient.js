@@ -129,6 +129,9 @@ Sync.prototype = {
   },
   reset: function (callback) {
     this.service.reset(callback);
+  },
+  authenticateUrl: function (url) {
+    return this.authenticator.modifyUrl(url);
   }
 };
 
