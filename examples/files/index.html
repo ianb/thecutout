@@ -46,10 +46,10 @@
     <script type="text/template" id="file-template">
       <li>
         <button class="remove" type="button" title="remove file">x</button>
-        <code class="filename"><%- filename %></code> <%- formatSize(size) %>
-        <% if (href) { %>
+        <code class="filename"><%- file.name %></code> <%- file.formattedSize() %>
+        <% if (file.href) { %>
         <!-- FIXME: should quote filename -->
-          <a download="<%- filename %>" href="<%- downloadHref %>">download</a>
+          <a download="<%- file.name %>" href="<%- file.downloadLink(true) %>">download</a>
         <% } %>
       </li>
     </script>
