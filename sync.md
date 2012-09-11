@@ -164,7 +164,11 @@ The object returned as some methods:
 
 `activate()/deactivate()`: activate or deactivate the scheduler. Before you retire a sync object you should call `sync.deactivate()`. The scheduler is automatically activated on startup.  The polling frequency is automatically adjusted based on whether the tab is in the background or not.
 
+`request()`: ask to get authentication (this is identicaly to `navigator.id.request()`)
+
 `logout()`: get rid of all authentication information.
+
+`toggleLogin()`: if logged in, then log out.  If logged out, then request login.
 
 `watch(options)`: similar to `navigator.id.watch()` but is called after server verification is done.  The `onlogin` method is called with `onlogin(email, completeData)` (not an assertion).  Note this uses cached credentials, unlike `navigator.id.watch()`.
 

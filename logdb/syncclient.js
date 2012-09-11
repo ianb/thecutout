@@ -124,6 +124,13 @@ Sync.prototype = {
   request: function (args) {
     this.authenticator.request(args);
   },
+  toggleLogin: function () {
+    if (this.authenticator.loggedIn()) {
+      this.authenticator.logout();
+    } else {
+      this.authenticator.request();
+    }
+  },
   watch: function (options) {
     this.authenticator.watch(options);
   },
@@ -432,8 +439,18 @@ Sync.Service.prototype = {
   _validateObjects: function(objects) {
     var errors = [];
     var allowedProps = ['type', 'id', 'expires', 'data', 'deleted', 'blob'];
+    var checkDups = {};
     for (var i=0; i<objects.length; i++) {
       var object = objects[i];
+      var objectId = (object.type || '') + '\000' + object.id;
+      if (checkDups.hasOwnProperty(objectId)) {
+        errors.push({
+          object: object,
+          error: 'Multiple objects have the type "' + (object.type || 'no type') +
+                '" and the id "' + object.id + '"'
+        });
+      }
+      checkDups[objectId] = true;
       if (! object.id) {
         errors.push({object: object, error: 'No .id property'});
       }
@@ -1099,7 +1116,7 @@ Sync.PersonaAuthenticator.prototype = {
   },
 
   _assertionReceived: function (assertion) {
-    log('Received assertion', assertion);
+    log('Received assertion', assertion.substr(0, 10)+'...');
     var req = new Sync.Server.prototype.XMLHttpRequest();
     req.open('POST', this.verifyUrl);
     var audience = location.protocol + '//' + location.host;
