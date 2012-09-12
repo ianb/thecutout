@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""
+Dev server, for running your own apps (while testing/developing)
+"""
 import optparse
 import sys
 import os
@@ -14,8 +17,12 @@ for i in range(3):
     for check in checks:
         dir = os.path.join(path, check)
         if os.path.exists(dir):
-            print 'Adding', dir
+            old_sys_path = list(sys.path)
             site.addsitedir(dir)
+            for new_path in list(sys.path):
+                if new_path not in old_sys_path:
+                    sys.path.remove(new_path)
+                    sys.path.insert(0, new_path)
     path = os.path.dirname(path)
 
 parser = optparse.OptionParser(
