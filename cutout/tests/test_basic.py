@@ -3,7 +3,7 @@ import re
 import random
 import time
 import struct
-from logdb import Database
+from cutout import Database
 from unittest2 import TestCase
 
 tmp_filename = '/tmp/test.db'

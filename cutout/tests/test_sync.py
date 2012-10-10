@@ -5,7 +5,7 @@ import webtest
 import simplejson as json
 from itertools import count
 from unittest2 import TestCase
-from logdb.sync import Application, UserStorage
+from cutout.sync import Application, UserStorage
 
 here = os.path.dirname(os.path.abspath(__file__))
 test_dir = os.path.join(here, 'test-sync-dbs')

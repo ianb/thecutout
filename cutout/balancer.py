@@ -6,8 +6,8 @@ from webob import Request
 from hash_ring import HashRing
 import urllib
 import urlparse
-from logdb import sync
-from logdb.forwarder import forward
+from cutout import sync
+from cutout.forwarder import forward
 
 
 class Application(object):

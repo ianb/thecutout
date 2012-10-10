@@ -3,7 +3,7 @@ import os
 import urllib
 import random
 import time
-from logdb import Database
+from cutout import Database
 
 
 def load_users(dir, user_count, records, size, audience='example.com'):

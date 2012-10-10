@@ -3,9 +3,9 @@ import string
 import os
 import sys
 import time
-from logdb import Database
-from logdb.streamdb import Database as StreamDatabase
-from logdb.sql import MySQLStorage
+from cutout import Database
+from cutout.streamdb import Database as StreamDatabase
+from cutout.sql import MySQLStorage
 
 DATA = string.ascii_letters
 
@@ -161,7 +161,7 @@ parser.add_option(
 parser.add_option(
     '--stream',
     action='store_true',
-    help="Use the logdb.streamdb database instead of logdb.Database")
+    help="Use the cutout.streamdb database instead of cutout.Database")
 
 parser.add_option(
     '--profile',

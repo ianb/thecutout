@@ -5,7 +5,7 @@ import urlparse
 
 @wsgify.middleware
 def rooted(req, app):
-    req.environ['logdb.root'] = (app, req.application_url)
+    req.environ['cutout.root'] = (app, req.application_url)
     return app
 
 
@@ -15,9 +15,9 @@ def forward(req, new_req=None, root=None):
     if root is not None:
         return new_req.send(root)
     root = root_url = None
-    if req.environ.get('logdb.root'):
-        root, root_url = req.environ['logdb.root']
-        new_req.environ['logdb.root'] = req.environ['logdb.root']
+    if req.environ.get('cutout.root'):
+        root, root_url = req.environ['cutout.root']
+        new_req.environ['cutout.root'] = req.environ['cutout.root']
     if root_url and new_req.url.startswith(root_url):
         app_path = urlparse.urlsplit(root_url).path
         req_path = new_req.path

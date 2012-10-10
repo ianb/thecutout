@@ -22,9 +22,9 @@ from webob.static import FileApp
 from hash_ring import HashRing
 from fcntl import lockf as lock_file
 from fcntl import LOCK_UN, LOCK_EX
-from logdb import Database, ExpectationFailed, lock_complete
-from logdb import int_encoding
-from logdb.forwarder import forward
+from cutout import Database, ExpectationFailed, lock_complete
+from cutout import int_encoding
+from cutout.forwarder import forward
 
 
 syncclient_filename = os.path.join(
@@ -131,7 +131,7 @@ class Storage(object):
 
     @property
     def db(self):
-        """Returns the logdb database"""
+        """Returns the cutout database"""
         if self.is_deprecated:
             raise StorageDeprecated()
         db_name = os.path.join(self.dir, 'database')
@@ -140,7 +140,7 @@ class Storage(object):
 
     @property
     def deprecated_db(self):
-        """Returns the logdb dataabse, if this is deprecated"""
+        """Returns the cutout dataabse, if this is deprecated"""
         db_name = os.path.join(self.dir, 'deprecated')
         if not os.path.exists(db_name):
             raise IOError("File does not exist: %r" % db_name)
@@ -156,7 +156,7 @@ class Storage(object):
 
     @property
     def queue_db(self):
-        """The queue logdb database"""
+        """The queue cutout database"""
         db_name = os.path.join(self.dir, 'queue')
         db = Database(db_name)
         return db
@@ -365,7 +365,7 @@ class Application(object):
 
     def __init__(self, storage=None, dir=None,
                  include_syncclient=False,
-                 secret_filename='/tmp/logdb-secret.txt'):
+                 secret_filename='/tmp/cutout-secret.txt'):
         if storage is None and dir:
             storage = UserStorage(dir)
         self.storage = storage
@@ -383,7 +383,7 @@ class Application(object):
 
     def is_internal(self, req):
         ## FIXME: do actual authentication
-        return req.environ.get('logdb.internal')
+        return req.environ.get('cutout.internal')
 
     def assert_is_internal(self, req):
         if not self.is_internal(req):
@@ -649,7 +649,7 @@ class Application(object):
             if key in backup_req.GET:
                 del backup_req.GET[key]
         backup_req.body = req.body
-        backup_req.environ['logdb.root'] = req.environ.get('logdb.root')
+        backup_req.environ['cutout.root'] = req.environ.get('cutout.root')
         resp = forward(backup_req)
         #print 'sending backup req', backup_req, resp
         if resp.status_code >= 300:
@@ -833,7 +833,7 @@ class Application(object):
             url = urlparse.urljoin(req.application_url, '/' + other_node)
             status.write('Deprecating from %s\n' % url)
             query = Request.blank(url + '/query-deprecate', json=req_data, method='POST')
-            query.environ['logdb.root'] = req.environ.get('logdb.root')
+            query.environ['cutout.root'] = req.environ.get('cutout.root')
             resp = forward(query)
             assert resp.status_code == 200, str(resp)
             resp_data = resp.json
@@ -844,7 +844,7 @@ class Application(object):
             status.write('Copying database %s from %s\n' % (db_data['path'], other_node))
             url = urlparse.urljoin(req.application_url, '/' + other_node)
             copier = Request.blank(url + urllib.quote(db_data['path']) + '?copy')
-            copier.environ['logdb.root'] = req.environ.get('logdb.root')
+            copier.environ['cutout.root'] = req.environ.get('cutout.root')
             resp = forward(copier)
             assert resp.status_code == 200, str(resp)
             ## FIXME: the terribleness!
@@ -853,7 +853,7 @@ class Application(object):
             db.decode_db(fp)
             status.write('  copied %i bytes\n' % resp.content_length)
             deleter = Request.blank(url + db_data['path'] + '?delete')
-            deleter.environ['logdb.root'] = req.environ.get('logdb.root')
+            deleter.environ['cutout.root'] = req.environ.get('cutout.root')
             resp = forward(deleter)
             assert resp.status_code < 300, str(resp)
             status.write('  deleted\n')
@@ -897,7 +897,7 @@ class Application(object):
             url = urlparse.urljoin(req.application_url, '/' + new_node)
             send = Request.blank(url + urllib.quote(path) + '?paste',
                                  method='POST', body=''.join(db.encode_db()))
-            send.environ['logdb.root'] = req.environ.get('logdb.root')
+            send.environ['cutout.root'] = req.environ.get('cutout.root')
             resp = forward(send)
             assert resp.status_code == 201, str(resp)
             status.write('  success, deleting\n')
@@ -998,7 +998,7 @@ class Application(object):
                 catchup_req = Request.blank(source)
                 catchup_req.GET['copy'] = ''
                 catchup_req.GET['until'] = backup_pos
-                catchup_req.environ['logdb.root'] = req.environ.get('logdb.root')
+                catchup_req.environ['cutout.root'] = req.environ.get('cutout.root')
                 resp = forward(catchup_req)
                 assert resp.status_code == 200, str(resp)
                 fp = StringIO(resp.body)
@@ -1053,7 +1053,7 @@ class Application(object):
             db = self.storage.for_user(domain, username, bucket)
             send = Request.blank(replacement_node + urllib.quote(path) + '?paste',
                                  method='POST', body=''.join(db.encode_db()))
-            send.environ['logdb.root'] = req.environ.get('logdb.root')
+            send.environ['cutout.root'] = req.environ.get('cutout.root')
             resp = forward(send)
             assert resp.status_code == 201, str(resp)
             #status.write('  nodes: %r - %r / %r\n' % (active_nodes, bad_node, self_name))
