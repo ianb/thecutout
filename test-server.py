@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Test server, for running the logdb/sync tests
+Test server, for running the cutout/sync tests
 """
 import optparse
 import sys
@@ -49,13 +49,13 @@ def main():
         if os.path.exists(options.dir):
             print 'Deleting %s' % options.dir
             shutil.rmtree(options.dir)
-    from logdb.sync import Application
+    from cutout.sync import Application
     db_app = Application(dir=options.dir, include_syncclient=True)
     from webob.static import DirectoryApp
     from paste.urlmap import URLMap
     map = URLMap()
     map['/'] = DirectoryApp(
-        os.path.join(here, 'logdb', 'tests', 'syncclient'))
+        os.path.join(here, 'cutout', 'tests', 'syncclient'))
     map['/db'] = TestAuthMiddleware(db_app)
     from paste.httpserver import serve
     serve(map, host=options.host, port=int(options.port))

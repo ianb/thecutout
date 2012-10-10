@@ -28,7 +28,7 @@ for i in range(3):
 parser = optparse.OptionParser(
     usage='%prog [OPTIONS] [[path=]STATIC_DIR]',
     description="""\
-Serves up logdb at http://localhost:8088/sync/syncclient.js
+Serves up The Cut-Out at http://localhost:8088/sync/syncclient.js
 
 Also serves up static files.  You may provide one or many STATIC_DIR
 entries.  You may give prefixes for these (e.g.,
@@ -62,7 +62,7 @@ def main():
         else:
             path, dir = '/', arg
         mapper[path] = DirectoryApp(dir)
-    from logdb.sync import Application
+    from cutout.sync import Application
     db_app = Application(dir=options.dir, include_syncclient=True)
     mapper['/sync'] = db_app
     serve(mapper, host=options.host, port=int(options.port))
