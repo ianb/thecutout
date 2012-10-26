@@ -1,46 +1,32 @@
-var Authenticator = function (user, domain) {
+var mockUser = "test-"+(new Date().getTime())+"@example.com";
+var mockDomain = location.hostname;
 
-  if (! user) {
-    user = "test-"+(Date.now())+"@example.com";
-  }
+var Authenticator = {
+  modifyRequest: function (req) {
+    req.setRequestHeader('X-Remote-User', mockUser + '/' + mockDomain);
+  },
 
-  if (! domain) {
-    domain = location.hostname;
-  }
+  modifyUrl: function (url) {
+    return url;
+  },
 
-  return {
-    modifyRequest: function (req) {
-      req.setRequestHeader('X-Remote-User', user + '/' + domain);
-    },
+  loggedIn: function () {
+    return true;
+  },
 
-    modifyUrl: function (url) {
-      return url;
-    },
+  request: function () {
+  },
 
-    loggedIn: function () {
-      return true;
-    },
-
-    logout: function () {
-      throw 'Not implemented';
-    },
-
-    request: function () {
-      throw 'Not implemented';
-    },
-
-    email: user,
-
-    domain: domain,
-
-    serverUrl: (doctest.params.server || '/') +
-      encodeURIComponent(domain) +
-      '/' + encodeURIComponent(user) + "/bucket",
-
-    watch: function (options) {
-      // FIXME: do something with options
+  watch: function (options) {
+    var onlogin = options.onlogin;
+    if (onlogin) {
+      onlogin({email: mockUser});
     }
-  };
+  },
+
+  logout: function () {
+    throw 'not implemented';
+  }
 };
 
 function MockAppData(name) {

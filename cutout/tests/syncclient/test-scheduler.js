@@ -8,9 +8,7 @@ server needs to be run with the client test overrides in place, so we
 can trigger various cases and make sure the scheduling works.
 */
 
-var auth = Authenticator();
-
-var server = new Sync.Server(auth.serverUrl, auth);
+var server = new Sync.Server(location.hostname + '/' + mockUser, 'bucket', Authenticator);
 var appData = new MockAppData('appData');
 var storage = new Sync.LocalStorage('sync::');
 storage.clear();
@@ -18,7 +16,7 @@ var service = new Sync.Service(server, appData, storage);
 print(service);
 // => [Sync.Service server: ... appData: ...]
 
-var scheduler = new Sync.Scheduler(service, auth);
+var scheduler = new Sync.Scheduler(service, Authenticator);
 
 function override(t, data) {
   var done = false;
@@ -77,12 +75,22 @@ function get() {
 
 print(scheduler.settings);
 /* =>
-{failureIncrease: 300000, immediateUpdateDelay: 500, maxPeriod: 3600000, minPeriod: 30000, normalPeriod: 300000}
+{
+  failureIncrease: 300000,
+  immediateUpdateDelay: 500,
+  maxPeriod: 3600000,
+  minPeriod: 30000,
+  normalPeriod: 300000
+}
 */
 
 // This will start out with the standard poll time
 get();
-// => Poll: 300000
+/* =>
+Poll: 300000
+appData.status: {status: "sync_get", timestamp: ?}
+appData.getPendingObjects: []
+*/
 
 // Immediate schedule should mean a minimal update time
 scheduler.scheduleImmediately();
@@ -164,11 +172,11 @@ get();
 Next, we'll give a quick try at triggering logout/auth:
 */
 
-print(auth.loggedIn());
+print(Authenticator.loggedIn());
 // => true
 override('__testing__', {status: 401});
 // => Completed
 get();
 // => ...
-print(auth.loggedIn());
+print(Authenticator.loggedIn());
 // => false

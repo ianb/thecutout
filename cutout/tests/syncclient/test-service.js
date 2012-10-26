@@ -8,8 +8,7 @@ jshint('syncclient.js', {laxbreak: true, shadow: true});
  it).
  */
 
-var auth = Authenticator();
-var server = new Sync.Server(auth.serverUrl, auth);
+var server = new Sync.Server(location.hostname + '/' + mockUser, 'bucket', Authenticator);
 server.XMLHttpRequest = doctest.NosyXMLHttpRequest.factory('ServerReq');
 print(server);
 // => [...]
@@ -70,7 +69,7 @@ server.get(null, Spy('server.get', {wait: 2000}));
 ServerReq.open("GET", ".../bucket?since=0")
 ServerReq.setRequestHeader("X-Remote-User", "...")
 ServerReq.send()
-server.get(null, {collection_id: "?", objects: [[1, {data: 1, id: "aaa"}]]})
+server.get(null, {objects: [[1, {data: 1, id: "aaa"}]]})
 */
 
 service2.syncNow(Spy('service2.syncNow', {wait: 5000}));
@@ -92,7 +91,7 @@ server.put(100, [{id: 'bbb', data: 2}],
 ServerReq.open("POST", ".../bucket?since=100")
 ServerReq.setRequestHeader("X-Remote-User", "...")
 ServerReq.send("[{\"id\":\"bbb\",\"data\":2}]")
-server.put(null, {collection_id: "?", object_counters: [2]})
+server.put(null, {object_counters: [2]})
 */
 
 service.syncNow(Spy('service.syncNow', {wait: 5000}));
@@ -125,7 +124,7 @@ server.put(100, [{id: 'aaa', deleted: true}],
 ServerReq.open("POST", ".../bucket?since=100")
 ServerReq.setRequestHeader("X-Remote-User", "...")
 ServerReq.send("[{\"id\":\"aaa\",\"deleted\":true}]")
-server.put(null, {collection_id: "?", object_counters: [3]})
+server.put(null, {object_counters: [3]})
 */
 
 service.syncNow(Spy('service.syncNow', {wait: 5000}));
@@ -186,7 +185,7 @@ server.get(service2._syncPosition - 1, Spy('server.get', {wait: 2000}));
 ServerReq.open("GET", ".../bucket?since=3")
 ServerReq.setRequestHeader("X-Remote-User", "...")
 ServerReq.send()
-server.get(null, {collection_id: "?", objects: [[4, {data: 3, id: "ccc"}]]})
+server.get(null, {objects: [[4, {data: 3, id: "ccc"}]]})
 */
 
 appData._deleteObject('aaa');
@@ -211,7 +210,7 @@ server.get(service._syncPosition - 1, Spy('server.get', {wait: 2000}));
 ServerReq.open("GET", ".../bucket?since=4")
 ServerReq.setRequestHeader("X-Remote-User", "...")
 ServerReq.send()
-server.get(null, {collection_id: "?", objects: [[5, {deleted: true, id: "aaa"}]]})
+server.get(null, {objects: [[5, {deleted: true, id: "aaa"}]]})
 */
 
 service.syncNow(Spy('service2.syncNow', {wait: 5000}));

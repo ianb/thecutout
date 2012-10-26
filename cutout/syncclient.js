@@ -75,7 +75,7 @@ function Sync(appData, options) {
     name: 'Sync()',
     options: options,
     allowed: ['serverUrl', 'bucket', 'appName', 'verifyUrl', 'storage', 'assertion']
-  })
+  });
   var serverUrl = options.serverUrl || '';
   var bucket = options.bucket;
   if (! bucket) {
@@ -97,7 +97,7 @@ function Sync(appData, options) {
   if (appData.onupdate !== undefined) {
     appData.onupdate = this.scheduleImmediately.bind(this);
   }
-};
+}
 
 Sync.prototype = {
   lastSyncTime: function () {
@@ -195,7 +195,7 @@ Sync.Service.prototype = {
       steps--;
       if (steps === 0 && allSet) {
         this.sendStatus({status: 'reset'});
-        return callback && callback();
+        return Sync.finish(callback);
       }
     }).bind(this);
     steps++;
@@ -210,7 +210,7 @@ Sync.Service.prototype = {
     this._syncPosition = 0;
     if (steps === 0) {
       this.sendStatus({status: 'reset'});
-      return callback && callback();
+      return Sync.finish(callback);
     } else {
       allSet = true;
     }
@@ -296,13 +296,13 @@ Sync.Service.prototype = {
       if (error && error.collection_deleted && (! forcePut)) {
         log('Terminating sync due to collection deleted');
         logGroupEnd();
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }
       if (error && (! error.collection_deleted)) {
         log('getUpdates error/terminating', {error: error});
         this.sendStatus({error: 'sync_get', detail: error});
         logGroupEnd();
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }
       this.sendStatus({status: 'sync_get'});
       if (error && error.collection_deleted) {
@@ -313,7 +313,7 @@ Sync.Service.prototype = {
         this.reset((function () {
           this._putUpdates(function (error) {
             logGroupEnd();
-            return callback && callback(error);
+            return Sync.finish(callback, error);
           });
         }).bind(this));
         return;
@@ -330,7 +330,7 @@ Sync.Service.prototype = {
         }
         log('finished syncNow', {error: err});
         logGroupEnd();
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }).bind(this));
     }).bind(this));
   },
@@ -348,7 +348,7 @@ Sync.Service.prototype = {
     this.server.deleteCollection(reason, (function (error, result) {
       if (error) {
         this.sendStatus({error: 'delete_collection', detail: error});
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }
       this._setLastSyncTime(0);
       this._setLastSyncPut(0);
@@ -362,21 +362,21 @@ Sync.Service.prototype = {
      Calls callback with no arguments on success */
   _getUpdates: function (callback) {
     if (this._syncPosition === undefined) {
-      return callback && callback({error: "storage hasn't updated syncPosition yet"});
+      return Sync.finish(callback, {error: "storage hasn't updated syncPosition yet"});
     }
     this.server.get(this._syncPosition, (function (error, results) {
       log('Ran GET', {since: this._syncPosition, results: results, error: error});
       if (error) {
         this.sendStatus({error: 'server_get', detail: error});
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }
       if (! this.confirmCollectionId(results.collection_id)) {
         // FIXME: should accept the new results
         this.reset();
-        return callback && callback({error: "collection_id_changed"});
+        return Sync.finish(callback, {error: "collection_id_changed"});
       }
       if (error) {
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }
       this._processUpdates(results, callback);
     }).bind(this));
@@ -384,7 +384,7 @@ Sync.Service.prototype = {
 
   _processUpdates: function (results, callback) {
     if (results.objects.length) {
-      var newPosition = results.until || results.objects[results.objects.length-1][0]
+      var newPosition = results.until || results.objects[results.objects.length-1][0];
       var received = [];
       var seen = {};
       for (var i=results.objects.length-1; i>=0; i--) {
@@ -413,12 +413,12 @@ Sync.Service.prototype = {
         }
       }
       if (error) {
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }
     } else {
       this._setLastSyncTime(Date.now());
     }
-    return callback && callback();
+    return Sync.finish(callback);
   },
 
   /* Sends any updates the service finds to the remote server.
@@ -430,7 +430,7 @@ Sync.Service.prototype = {
       // between "errors" and a mis-called callback(result).  Maybe
       // require error to be an object, not an array?
       if (error) {
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }
       this._putUpdatedObjects(result, callback);
     }).bind(this));
@@ -504,7 +504,7 @@ Sync.Service.prototype = {
   _putUpdatedObjects: function (objects, callback) {
     if (! objects.length) {
       log('No updates to send');
-      return callback && callback();
+      return Sync.finish(callback);
     }
     var errors = this._validateObjects(objects);
     if (errors) {
@@ -519,7 +519,7 @@ Sync.Service.prototype = {
         });
         log('Objects have errors:', err);
       }
-      return callback && callback({error: 'Objects have errors', detail: errors});
+      return Sync.finish(callback, {error: 'Objects have errors', detail: errors});
     }
     this.sendStatus({status: 'sync_put', count: objects.length});
     log('putUpdates', {updates: objects});
@@ -527,17 +527,17 @@ Sync.Service.prototype = {
       log('server put completed', {error: error, result: result});
       if (error) {
         this.sendStatus({error: 'sync_put', detail: error});
-        return callback && callback(error);
+        return Sync.finish(callback, error);
       }
       if (! this.confirmCollectionId(result.collection_id)) {
-        return callback && callback({error: "collection_id_changed"});
+        return Sync.callback(callback, {error: "collection_id_changed"});
       }
       if (result.since_invalid) {
         // the put failed and we need to process the updates and try again
         this.sendStatus({status: 'sync_put_precondition_failed'});
         this._processUpdates(result, (function (error) {
           if (error) {
-            return callback && callback(error);
+            return Sync.finish(callback, error);
           }
           this._putUpdates(callback);
         }).bind(this));
@@ -546,7 +546,7 @@ Sync.Service.prototype = {
       this.sendStatus({status: 'sync_put_complete'});
       if ((! result.object_counters) || (! result.object_counters.length)) {
         // This shouldn't happen
-        return callback && callback({error: 'No .object_counters received from server', result: result});
+        return Sync.finish(callback, {error: 'No .object_counters received from server', result: result});
       }
       this._setSyncPosition(result.object_counters[result.object_counters.length-1]);
       var error = null;
@@ -574,7 +574,7 @@ Sync.Service.prototype = {
         this._setLastSyncPut(now);
         this._setLastSyncTime(now);
       }
-      return callback && callback(error);
+      return Sync.finish(callback, error);
     }).bind(this));
   }
 
@@ -775,15 +775,13 @@ Sync.Server.prototype = {
       }
       this.checkRequest(req);
       if (req.status != 200) {
-        callback({error: "Non-200 response code", code: req.status, url: url, request: req, text: req.responseText});
-        return;
+        return Sync.finish(callback, {error: "Non-200 response code", code: req.status, url: url, request: req, text: req.responseText});
       }
       var data;
       try {
         data = JSON.parse(req.responseText);
       } catch (e) {
-        callback({error: "invalid_json", exception: e, data: req.responseText});
-        return;
+        return Sync.finish(callback, {error: "invalid_json", exception: e, data: req.responseText});
       }
       if (data.collection_deleted) {
         callback(data, null);
@@ -811,7 +809,7 @@ Sync.Server.prototype = {
       }
       this.checkRequest(req);
       if (req.status != 200) {
-        return callback && callback({error: "Non-200 response code", code: req.status, url: url, request: req});
+        return Sync.finish(callback, {error: "Non-200 response code", code: req.status, url: url, request: req});
       }
       var data = JSON.parse(req.responseText);
       callback(null, data);
@@ -834,8 +832,7 @@ Sync.Server.prototype = {
       // operation:
       this.checkAuthRequest(req);
       if (req.status != 200) {
-        callback({error: "Non-200 response code", code: req.status, url: url, request: req});
-        return;
+        return Sync.finish(callback, {error: "Non-200 response code", code: req.status, url: url, request: req});
       }
       var data;
       if (req.responseText) {
@@ -1109,12 +1106,6 @@ Sync.PersonaAuthenticator.prototype = {
     }
   },
 
-  logout: function () {
-    navigator.id.logout();
-    this.authData = this.email = null;
-    this._callOnlogout();
-  },
-
   _assertionReceived: function (assertion) {
     log('Received assertion', assertion.substr(0, 10)+'...');
     var req = new Sync.Server.prototype.XMLHttpRequest();
@@ -1129,8 +1120,9 @@ Sync.PersonaAuthenticator.prototype = {
         log('Error in auth:', req.status, req.statusText);
         return;
       }
+      var result;
       try {
-        var result = JSON.parse(req.responseText);
+        result = JSON.parse(req.responseText);
       } catch (e) {
         log('Error parsing response:', req.responseText);
         throw e;
@@ -1255,6 +1247,7 @@ Sync.LocalStorage.prototype = {
     if (! isList) {
       result = result[attributes[0]];
     }
+    // FIXME: should this be callback(null, result)?
     callback(result);
   },
 
@@ -1277,12 +1270,12 @@ Sync.LocalStorage.prototype = {
         }
       }
     }
-    if (callback) callback();
+    return Sync.finish(callback);
   },
 
   clear: function (callback) {
     if (! this._prefix) {
-      return callback && callback({error: 'Cannot clear without a prefix'});
+      return Sync.finish(callback, {error: 'Cannot clear without a prefix'});
     }
     var toDelete = [];
     for (var i=0; i<localStorage.length; i++) {
@@ -1294,7 +1287,18 @@ Sync.LocalStorage.prototype = {
     for (var i=0; i<toDelete.length; i++) {
       localStorage.removeItem(toDelete[i]);
     }
-    return callback && callback();
+    return Sync.finish(callback);
   }
 
+};
+
+Sync.finish = function (callback, error) {
+  if (! callback) {
+    return;
+  }
+  if (! error) {
+    callback();
+  } else {
+    callback(error);
+  }
 };

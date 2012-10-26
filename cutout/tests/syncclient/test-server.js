@@ -14,18 +14,33 @@ var Authenticator = {
     req.setRequestHeader('X-Remote-User', user + '/' + domain);
   },
 
+  modifyUrl: function (url) {
+    return url;
+  },
+
   loggedIn: function () {
     return true;
   },
 
-  onlogin: null,
-  onlogout: null
+  request: function () {
+  },
+
+  watch: function (options) {
+    var onlogin = options.onlogin;
+    if (onlogin) {
+      onlogin({email: user});
+    }
+  },
+
+  logout: function () {
+    throw 'not implemented';
+  }
 };
 
 var serverUrl = doctest.params.server ||
   "/" + encodeURIComponent(domain) +
   '/' + encodeURIComponent(user) + "/bucket";
-var server = new Sync.Server(serverUrl, Authenticator);
+var server = new Sync.Server(serverUrl, 'test', Authenticator);
 print(server);
 // => [...]
 
@@ -48,7 +63,6 @@ audience ;)
 server.get(null, Spy('server.get', {wait: true}));
 /* =>
 server.get(null, {
-  collection_id: "?",
   objects: []
 })
 */
@@ -60,7 +74,6 @@ server.get('asdf', Spy('server.get-fail'));
 server.get(0, Spy('server.get', {wait: true}));
 /* =>
 server.get(null, {
-  collection_id: "?",
   objects: []
 })
 */
@@ -71,7 +84,6 @@ server.get(0, spy);
 spy.wait();
 /* =>
 server.get(null, {
-  collection_id: "?",
   objects: []
 })
 */
@@ -88,7 +100,6 @@ server.put(null, [{
 putSpy.wait();
 /* =>
 server.put(null, {
-  collection_id: "?",
   object_counters: [1]
 })
 */
@@ -97,7 +108,6 @@ server.put(null, {
 server.get(0, spy=Spy('server.get', {wait: true}));
 /* =>
 server.get(null, {
-  collection_id: "?",
   objects: [
     [
       1,
@@ -124,7 +134,6 @@ print(until);
 server.get(until+2, Spy('server.get', {wait: true}));
 /* =>
 server.get(null, {
-  collection_id: "?",
   objects: []
 })
 */
