@@ -8,11 +8,11 @@
  * :license: BSD, see LICENSE for details.
  *
  */
- 
+
 @import url("basic.css");
- 
+
 /* -- page layout ----------------------------------------------------------- */
- 
+
 body {
     font-family: "NobileRegular", sans-serif;
     font-size: 14px;
@@ -21,7 +21,7 @@ body {
     margin: 0;
     padding: 0;
 }
-    
+
 div.documentwrapper {
     float: left;
     width: 100%;
@@ -34,7 +34,7 @@ div.bodywrapper {
 hr {
     border: 1px solid #B1B4B6;
 }
- 
+
 div.document {
     background-color: #eee;
 }
@@ -72,7 +72,7 @@ div.body {
 	border-right-style: none;
 	overflow: auto;
 }
- 
+
 div.footer {
     color: #ffffff;
     width: 100%;
@@ -82,7 +82,7 @@ div.footer {
     background: transparent;
     clear:both;
 }
- 
+
 div.footer a {
     color: #ffffff;
     text-decoration: none;
@@ -92,14 +92,14 @@ div.footer a:hover {
     color: #e88f00;
     text-decoration: underline;
 }
- 
+
 div.related {
     line-height: 30px;
     color: #373839;
     font-size: 12px;
 	background-color: #eee;
 }
- 
+
 div.related a {
     color: #1b61d6;
 }
@@ -107,7 +107,7 @@ div.related a {
 div.related ul {
 	padding: 0 150px 0 240px;
 }
- 
+
 div.sphinxsidebar {
     font-size: 12px;
     line-height: 1.5em;
@@ -116,10 +116,10 @@ div.sphinxsidebar {
 div.sphinxsidebarwrapper{
     padding: 10px 0;
 }
- 
+
 div.sphinxsidebar h3,
 div.sphinxsidebar h4 {
-    font-family: "NeutonRegular", sans-serif;
+    font-family: "Rosarivo", sans-serif;
     color: #373839;
     font-size: 1.4em;
     font-weight: normal;
@@ -131,30 +131,30 @@ div.sphinxsidebar h4 {
 div.sphinxsidebar h4{
     font-size: 1.3em;
 }
- 
+
 div.sphinxsidebar h3 a {
     color: #000000;
 }
- 
- 
+
+
 div.sphinxsidebar p {
     color: #888;
     padding: 5px 20px;
 }
- 
+
 div.sphinxsidebar p.topless {
 }
- 
+
 div.sphinxsidebar ul {
     margin: 10px 20px;
     padding: 0;
     color: #373839;
 }
- 
+
 div.sphinxsidebar a {
     color: #444;
 }
- 
+
 div.sphinxsidebar input {
     border: 1px solid #ccc;
     font-family: sans-serif;
@@ -183,31 +183,31 @@ p.sidebar-title {
 }
 
 /* -- body styles ----------------------------------------------------------- */
- 
+
 a, a .pre {
     color: #1b61d6;
     text-decoration: none;
     word-wrap: break-word;
 }
- 
+
 a:hover, a:hover .pre {
     text-decoration: underline;
 }
- 
+
 div.body h1,
 div.body h2,
 div.body h3,
 div.body h4,
 div.body h5,
 div.body h6 {
-    font-family: "NeutonRegular", sans-serif;
+    font-family: "Rosarivo", sans-serif;
     background-color: #ffffff;
     font-weight: normal;
     color: #222;
     margin: 30px 0px 10px 0px;
     padding: 5px 0;
 }
- 
+
 div.body h1 {
     font-size: 2.5em;
     line-height: 1;
@@ -238,22 +238,38 @@ div.body h6 {
     font-weight: bold;
     margin-bottom: 2.00em;
 }
- 
+
+.header-small h1 {
+    font-family: "Rosarivo", sans-serif;
+    font-size: 42px;
+    padding-left: 0.3em;
+    padding-top: 6px;
+    margin: 0;
+}
+
+.header-small h1 a:link, .header-small h1 a:visited {
+    color: #310;
+}
+
+.header-small h1 a:hover {
+  text-decoration: underline;
+}
+
 a.headerlink {
     color: #1b61d6;
     font-size: 12px;
     padding: 0 4px 0 4px;
     text-decoration: none;
 }
- 
+
 a.headerlink:hover {
 	text-decoration: underline;
 }
- 
+
 div.body p, div.body dd, div.body dt, div.body li {
     line-height: 1.5em;
 }
- 
+
 div.admonition p.admonition-title + p {
     display: inline;
 }
@@ -269,7 +285,7 @@ div.note {
 	padding: 10px 20px 10px 60px;
 	background: #e1ecfe url(dialog-note.png) no-repeat 10px 8px;
 }
- 
+
 div.seealso {
     background: #fff6bf url(dialog-seealso.png) no-repeat 10px 8px;
     border: 2px solid #ffd324;
@@ -277,7 +293,7 @@ div.seealso {
 	border-right-style: none;
 	padding: 10px 20px 10px 60px;
 }
- 
+
 div.topic {
     background: #eeeeee;
     border: 2px solid #C6C9CB;
@@ -285,7 +301,7 @@ div.topic {
 	border-right-style: none;
 	border-left-style: none;
 }
- 
+
 div.warning {
     background: #fbe3e4 url(dialog-warning.png) no-repeat 10px 8px;
     border: 2px solid #fbc2c4;
@@ -293,11 +309,11 @@ div.warning {
 	border-left-style: none;
 	padding: 10px 20px 10px 60px;
 }
- 
+
 p.admonition-title {
     display: none;
 }
- 
+
 p.admonition-title:after {
     content: ":";
 }
@@ -312,10 +328,10 @@ pre, code {
     border-top: 2px solid #c6c9cb;
     border-bottom: 2px solid #c6c9cb;
 }
- 
+
 tt {
     background-color: transparent;
-    color: #222;
+    color: #257;
     font-family: Consolas, "andale mono", "lucida console", monospace;
 }
 
@@ -360,7 +376,7 @@ tt.xref {
 }
 
 span.methodcategory {
-    font-family: "NeutonRegular", sans-serif;
+    font-family: "Rosarivo", sans-serif;
     background-color: #ffffff;
     font-weight: normal;
     color: #222;
