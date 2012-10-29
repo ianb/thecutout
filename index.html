@@ -1,63 +1,120 @@
 
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-
-
-<html xmlns="http://www.w3.org/1999/xhtml">
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<!DOCTYPE html><html>
+<head>
+    <meta http-equiv="Content-Type"
+          content="text/html; charset=utf-8"/>
     
-    <title>The Cut-Out: a no-opinion syncing system for your Javascript/HTML applications &mdash; The Cut-Out</title>
+        <title>The Cut-Out: a no-opinion syncing system for your Javascript/HTML applications &mdash; The Cut-Out</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href='http://fonts.googleapis.com/css?family=Crete+Round' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="_static/sphinx-bootstrap.css" type="text/css"/>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css"/>
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+        <script type="text/javascript">
+            var DOCUMENTATION_OPTIONS = {
+                URL_ROOT:'',
+                VERSION:'0.1',
+                COLLAPSE_INDEX:false,
+                FILE_SUFFIX:'.html',
+                HAS_SOURCE:  true
+            };
+        </script>
+            <script type="text/javascript" src="_static/jquery.js"></script>
+            <script type="text/javascript" src="_static/underscore.js"></script>
+            <script type="text/javascript" src="_static/doctools.js"></script>
+            <script type="text/javascript" src="_static/bootstrap-dropdown.js"></script>
+        <link rel="top" title="The Cut-Out" href="#"/> 
+    <script type="text/javascript" src="https://apis.google.com/js/plusone.js"></script>
     
-    <link rel="stylesheet" href="_static/pylons.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+        <!-- analytics -->
+        <script type="text/javascript">
+            var _gaq = _gaq || [];
+            _gaq.push(['_setAccount', 'UA-6731441-13']);
+            
+            _gaq.push(['_trackPageview']);
+
+            (function () {
+                var ga = document.createElement('script');
+                ga.type = 'text/javascript';
+                ga.async = true;
+                ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+                var s = document.getElementsByTagName('script')[0];
+                s.parentNode.insertBefore(ga, s);
+            })();
+        </script>
     
-    <script type="text/javascript">
-      var DOCUMENTATION_OPTIONS = {
-        URL_ROOT:    '',
-        VERSION:     '0.1',
-        COLLAPSE_INDEX: false,
-        FILE_SUFFIX: '.html',
-        HAS_SOURCE:  true
-      };
-    </script>
-    <script type="text/javascript" src="_static/jquery.js"></script>
-    <script type="text/javascript" src="_static/underscore.js"></script>
-    <script type="text/javascript" src="_static/doctools.js"></script>
-    <link rel="top" title="The Cut-Out" href="#" />
-<!--<link rel="stylesheet" href="https://static.pylonsproject.org/fonts/nobile/stylesheet.css" type="text/css" media="screen" charset="utf-8" />
-<link rel="stylesheet" href="https://static.pylonsproject.org/fonts/neuton/stylesheet.css" type="text/css" media="screen" charset="utf-8" />-->
-<link href='http://fonts.googleapis.com/css?family=Rosarivo' rel='stylesheet' type='text/css'>
-<!--[if lte IE 6]>
-<link rel="stylesheet" href="_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
-<![endif]-->
-<link rel="shortcut icon" href="_static/pylons.ico"/>
+</head>
+<body>
 
-  </head>
-  <body>
-
-
-
-
-<a href="https://github.com/ianb/thecutout"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://a248.e.akamai.net/camo.github.com/7afbc8b248c68eb468279e8c17986ad46549fb71/687474703a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub"></a>
-
-
-<div class="header-small">
-        <h1><a href="#">The Cut-Out</a></h1>
-</div>
+    <div class="navbar navbar-static-top">
+        <div class="navbar-inner">
+            <div class="container">
 
     <div class="related">
-      <h3>Navigation</h3>
-      <ul>
-    	<li><a href="#">The Cut-Out</a> &raquo;</li> 
-      </ul>
-    </div>  
+        <ul class="nav">
+                <li class=""><a class="brand" href="#">The Cut-Out</a></li> 
+        </ul>
+    </div>
+                <div class="pull-right">
+                    
+        <form class="navbar-search" action="search.html"
+              method="get">
+            <input type="text" name="q" placeholder="search"/>
+            <input type="hidden" name="check_keywords" value="yes"/>
+            <input type="hidden" name="area" value="default"/>
+        </form>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
-          <div class="body">
-            
+
+<ul class="quick-links">
+    <li><strong>Quick links</strong></li>
+    <li>
+        <a href="https://github.com/ianb/thecutout/">GitHub</a>
+    </li>
+    <li>
+        <a href="https://github.com/ianb/thecutout/issues?state=open">Issues</a>
+    </li>
+    <li class="divider">&middot;</li>
+    <li>
+        <iframe class="github-btn"
+                src="http://ghbtns.com/github-btn.html?user=ianb&repo=thecutout&type=watch&count=true"
+                allowtransparency="true" frameborder="0" scrolling="0"
+                width="110px" height="20px"></iframe>
+    </li>
+    <li>
+        <iframe class="github-btn"
+                src="http://ghbtns.com/github-btn.html?user=ianb&repo=thecutout&type=fork&count=true"
+                allowtransparency="true" frameborder="0" scrolling="0"
+                width="94px" height="20px"></iframe>
+    </li>
+
+    <li class="divider">&middot;</li>
+    <li class="follow-btn">
+        <a href="https://twitter.com/ianbicking"
+           class="twitter-follow-button" data-width="145px"
+           data-link-color="#0069D6" data-show-count="false">Follow
+            @ianbicking</a>
+    </li>
+    <li class="tweet-btn">
+        <a href="https://twitter.com/share" class="twitter-share-button"
+           data-url="http://thecutout.org" data-count="horizontal"
+           data-via="twbootstrap"
+           data-related="ianbicking:Creator of The Cut-Out">Tweet</a>
+    </li>
+    <li class="plusone-container">
+        <g:plusone size="medium"></g:plusone>
+    </li>
+</ul>  
+    <div class="container">
+        <div class="content row">
+                <div class="span9">
+                    
   <p>A <a class="reference external" href="http://en.wikipedia.org/wiki/Cut-out_(espionage%29">&#8220;Cut-Out&#8221;</a>, in espionage terms, is a trusted intermediary who facilitates the exchange of information between agents.</p>
 <p>This project is a server and accompanying client library to provide an intermediary to store and communication information between browser-based applications (e.g., applications that use <tt class="code docutils literal"><span class="pre">localStorage</span></tt> or <tt class="code docutils literal"><span class="pre">IndexedDB</span></tt> as their primary storage).</p>
 <div class="section" id="quick-start">
@@ -410,11 +467,12 @@
 </div>
 
 
-          </div>
-        </div>
-      </div>
-      <div class="sphinxsidebar">
-        <div class="sphinxsidebarwrapper">
+                    
+                </div>
+                <div class="span3">
+                    
+        <div class="sphinxsidebar">
+            <div class="sphinxsidebarwrapper">
   <h3><a href="#">Table Of Contents</a></h3>
   <ul>
 <li><a class="reference internal" href="#">Quick Start</a></li>
@@ -454,31 +512,48 @@
 <li><a class="reference internal" href="#to-do">To Do</a></li>
 </ul>
 
-<div id="searchbox" style="display: none">
-  <h3>Quick search</h3>
-    <form class="search" action="search.html" method="get">
-      <input type="text" name="q" />
-      <input type="submit" value="Go" />
-      <input type="hidden" name="check_keywords" value="yes" />
-      <input type="hidden" name="area" value="default" />
-    </form>
-    <p class="searchtip" style="font-size: 90%">
-    Enter search terms or a module, class or function name.
-    </p>
-</div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+            </div>
         </div>
-      </div>
-      <div class="clearer"></div>
-    </div>
-    <div class="related">
-      <h3>Navigation</h3>
-      <ul>
-    	<li><a href="#">The Cut-Out</a> &raquo;</li> 
-      </ul>
+                </div>
+            
+        </div>
     </div>
     <div class="footer">
-        &copy; Copyright 2012, Ian Bicking.
+        
+        <div class="container">
+                    &copy;
+                        Copyright 2012, Ian Bicking.
+        </div>
     </div>
-  </body>
+
+
+
+<script type="text/javascript">
+    $('.nav .active').on('click', function () {
+        e.preventDefault()
+        $(this).siblings().toggle()
+    });
+</script>
+
+<!-- plusone -->
+<script type="text/javascript">
+    (function () {
+        var po = document.createElement('script');
+        po.type = 'text/javascript';
+        po.async = true;
+        po.src = 'https://apis.google.com/js/plusone.js';
+        var s = document.getElementsByTagName('script')[0];
+        s.parentNode.insertBefore(po, s);
+    })();
+</script>
+
+<!-- twitter -->
+<script src="http://platform.twitter.com/widgets.js" type="text/javascript"></script>
+
+</body>
 </html>

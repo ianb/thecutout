@@ -64,7 +64,7 @@ release = '0.1'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_src', 'pylons_sphinx_theme']
+exclude_patterns = ['_src', 'sphinx-bootstrap']
 
 # The reST default role (used for this markup: `text`) to use for all documents.
 default_role = "code"
@@ -91,19 +91,20 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-sys.path.append(os.path.abspath('pylons_sphinx_theme'))
-html_theme_path = ['pylons_sphinx_theme', '_theme']
-html_theme = 'pylons'
-
+sys.path.append(os.path.abspath('sphinx-bootstrap'))
+html_theme_path = ['sphinx-bootstrap', '_theme']
+html_theme = 'sphinx-bootstrap'
+html_theme_options = {
+    'analytics_code': 'UA-6731441-13',
+    'github_user': 'ianb',
+    'github_repo': 'thecutout',
+    'twitter_username': 'ianbicking',
+    'home_url': 'http://thecutout.org',
+    #'disqus_shortname': 'scotchmedia',
+}
+                        
 highlight_language = "javascript"
 
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
-html_theme_options = dict(
-    github_url="https://github.com/ianb/thecutout",
-    logo=None,
-    )
 
 # Add any paths that contain custom themes here, relative to this directory.
 #html_theme_path = []
