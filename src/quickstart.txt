@@ -1,0 +1,80 @@
+Quick Start
+-----------
+
+The Server
+~~~~~~~~~~
+
+First, start the server.  It should work to run ``python dev-server.py`` - all the prerequesites are included in ``vendor/``
+
+This will start the server up at ``http://localhost:8088/sync/`` - see ``-h`` for other options.  Note that ``selftest-server.py`` is for running the tests, so you don't want that one.  You can also use ``python dev-server.py my-app/`` which will serve up the files in ``my-app/`` on the root and put the server in ``/sync/`` (and the client library in ``/sync/syncclient.js``).
+
+
+The Page
+~~~~~~~~
+
+Next, include this in your page:
+
+.. code-block:: html
+
+    <script src="http://localhost:8088/sync/syncclient.js"></script>
+    <script src="https://browserid.org/include.js"></script>
+
+
+Integration Code
+~~~~~~~~~~~~~~~~
+
+And create an object to integrate with your stored data::
+
+    var MyAppData = {
+      getPendingObjects: function (callback) {
+        var result = [];
+        for (object in objectsThatArentSaved) {
+          result.push({id: object.id, data: object});
+        }
+        for (id in objectsThatWereDeleted) {
+          result.push({id: id, deleted: true});
+        }
+        callback(result);
+      },
+      objectsSaved: function (objects) {
+        objects.forEach(function (object) {
+          if (object.deleted) {
+            confirmDelete(object.id);
+          } else {
+            confirmSaved(object.data);
+          }
+        });
+      },
+      objectsReceived: function (objects) {
+        objects.forEach(function (object) {
+          if (object.deleted) {
+            deleteObject(object.id);
+          } else {
+            createObject(object.data);
+          }
+        });
+      },
+      onupdate: function () {}
+    };
+    sync = new Sync(MyAppData);
+    sync.watch({
+      onlogin: function (email) {
+        $('#login').text(email);
+      },
+      onlogout: function (email) {
+        $('#login').text('login');
+      }
+    });
+    $('#login').click(function () {
+      if ($('#login').text() == 'login') {
+        sync.request();
+      } else {
+        sync.logout();
+      }
+    });
+
+    // and call MyAppData.onupdate() whenever you update your objects
+
+That's it!  You also have a login system!
+
+To get the details see the `Library Documentation <library.html>`_.

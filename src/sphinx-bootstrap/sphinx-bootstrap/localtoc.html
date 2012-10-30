@@ -1,0 +1,13 @@
+{#
+    basic/localtoc.html
+    ~~~~~~~~~~~~~~~~~~~
+
+    Sphinx sidebar template: local table of contents.
+
+    :copyright: Copyright 2007-2011 by the Sphinx team, see AUTHORS.
+    :license: BSD, see LICENSE for details.
+#}
+{%- if display_toc %}
+  <!-- <h3>{{ docstitle }}</h3> -->
+  {{ toc.replace('<ul>', '<ul class="nav nav-list">', 1).replace('<li>', '<li class="active">', 1) }}
+{%- endif %}

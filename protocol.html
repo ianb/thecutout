@@ -1,0 +1,414 @@
+
+<!DOCTYPE html><html>
+<head>
+    <meta http-equiv="Content-Type"
+          content="text/html; charset=utf-8"/>
+    
+        <title>Protocol &mdash; The Cut-Out</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href='http://fonts.googleapis.com/css?family=Crete+Round' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="_static/sphinx-bootstrap.css" type="text/css"/>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css"/>
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+        <script type="text/javascript">
+            var DOCUMENTATION_OPTIONS = {
+                URL_ROOT:'',
+                VERSION:'0.1',
+                COLLAPSE_INDEX:false,
+                FILE_SUFFIX:'.html',
+                HAS_SOURCE:  true
+            };
+        </script>
+            <script type="text/javascript" src="_static/jquery.js"></script>
+            <script type="text/javascript" src="_static/underscore.js"></script>
+            <script type="text/javascript" src="_static/doctools.js"></script>
+            <script type="text/javascript" src="_static/bootstrap-dropdown.js"></script>
+        <link rel="top" title="The Cut-Out" href="./"/> 
+    <script type="text/javascript" src="https://apis.google.com/js/plusone.js"></script>
+    
+        <!-- analytics -->
+        <script type="text/javascript">
+            var _gaq = _gaq || [];
+            _gaq.push(['_setAccount', 'UA-6731441-13']);
+            
+            _gaq.push(['_trackPageview']);
+
+            (function () {
+                var ga = document.createElement('script');
+                ga.type = 'text/javascript';
+                ga.async = true;
+                ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+                var s = document.getElementsByTagName('script')[0];
+                s.parentNode.insertBefore(ga, s);
+            })();
+        </script>
+    
+</head>
+<body>
+
+    <div class="navbar navbar-static-top">
+        <div class="navbar-inner">
+            <div class="container">
+
+    <div class="related">
+        <ul class="nav">
+                <li class=""><a class="brand" href="./">The Cut-Out</a></li>
+                <li><a href="quickstart.html">Quick Start</a></li>
+<li><a href="library.html">Library Docs</a></li>
+<li class="active"><a href="protocol.html">Protocol</a></li>
+<li><a href="design.html">Design Rationale</a></li>
+ 
+        </ul>
+    </div>
+                <div class="pull-right">
+                    
+        <form class="navbar-search" action="search.html"
+              method="get">
+            <input type="text" name="q" placeholder="search"/>
+            <input type="hidden" name="check_keywords" value="yes"/>
+            <input type="hidden" name="area" value="default"/>
+        </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+<ul class="quick-links">
+    <li><strong>Quick links</strong></li>
+    <li>
+        <a href="https://github.com/ianb/thecutout/">GitHub</a>
+    </li>
+    <li>
+        <a href="https://github.com/ianb/thecutout/issues?state=open">Issues</a>
+    </li>
+    <li class="divider">&middot;</li>
+    <li>
+        <iframe class="github-btn"
+                src="http://ghbtns.com/github-btn.html?user=ianb&repo=thecutout&type=watch&count=true"
+                allowtransparency="true" frameborder="0" scrolling="0"
+                width="110px" height="20px"></iframe>
+    </li>
+    <li>
+        <iframe class="github-btn"
+                src="http://ghbtns.com/github-btn.html?user=ianb&repo=thecutout&type=fork&count=true"
+                allowtransparency="true" frameborder="0" scrolling="0"
+                width="94px" height="20px"></iframe>
+    </li>
+
+    <li class="divider">&middot;</li>
+    <li class="follow-btn">
+        <a href="https://twitter.com/ianbicking"
+           class="twitter-follow-button" data-width="145px"
+           data-link-color="#0069D6" data-show-count="false">Follow
+            @ianbicking</a>
+    </li>
+    <li class="tweet-btn">
+        <a href="https://twitter.com/share" class="twitter-share-button"
+           data-url="http://thecutout.org" data-count="horizontal"
+           data-via="twbootstrap"
+           data-related="ianbicking:Creator of The Cut-Out">Tweet</a>
+    </li>
+    <li class="plusone-container">
+        <g:plusone size="medium"></g:plusone>
+    </li>
+</ul>  
+    <div class="container">
+        <div class="content row">
+                <div class="span9">
+                    
+  <div class="section" id="protocol">
+<h1>Protocol<a class="headerlink" href="#protocol" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="expectations">
+<h2>Expectations<a class="headerlink" href="#expectations" title="Permalink to this headline">¶</a></h2>
+<p>The model of sync is a stream of updates.  All clients both put their local updates into this stream, and read the collective stream. Everything has to be represented as a concrete item in the stream, meaning that delete actions are also present in the stream.</p>
+<p>There is no conflict resolution, so clients must make sure they do not overwrite each other&#8217;s updates.  If a conflict cannot be resolved without interaction (e.g., simple overwrite is not considered acceptable, and automatic merging is not possible) then it must be possible to represent the conflicted state directly, and at some point some client can resolve the conflict (possibly with user interaction) and put the unconflicted object into the stream.</p>
+<p>The stream is ordered, along a single timeline.  The timeline markers should <em>not</em> be seen as based on any time or clock, as this leads to confusion and it&#8217;s not clear whose &#8220;now&#8221; we are talking about. Instead the server has a counter, and all clients work from that counter. (The counter need not be an uninterrupted stream of integers, just increasing.)</p>
+<p>All interaction between client and server should happen without user intervention.  Everything is expected to be highly asynchronous, and the server may reject requests or be unavailable for short periods of time, and this should not affect user experience.</p>
+<p>We expect for a new client to be able to create a good-enough duplicate of the data in other clients.  &#8220;Good-enough&#8221; because some data might be kept by clients but expired by the server because it was marked as not being permanently interesting.</p>
+<p><strong>TODO:</strong> For &#8220;known&#8221; datatypes the sync server ensures the integrity of data, according to the most up-to-date notion of correctness for the data type.  As such the sync server must be updated frequently, but clients will be protected from some other rogue clients. (&#8216;&#8217;&#8216;Note:&#8217;&#8216;&#8217; not sure if this is a practical expectation?)</p>
+<p>We&#8217;ll go out-of-order time-wise, and forget about authentication for now.</p>
+<p>Everything happens at a single URL endpoint, we&#8217;ll call it <tt class="docutils literal"><span class="pre">/USER</span></tt></p>
+</div>
+<div class="section" id="objects">
+<h2>Objects<a class="headerlink" href="#objects" title="Permalink to this headline">¶</a></h2>
+<p>Each object looks like this:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span><span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;type_name&quot;</span><span class="p">,</span>
+ <span class="nx">id</span><span class="o">:</span> <span class="s2">&quot;unique identifier among objects of this type&quot;</span><span class="p">,</span>
+ <span class="nx">expires</span><span class="o">:</span> <span class="nx">timestamp</span><span class="p">,</span>
+ <span class="nx">data</span><span class="o">:</span> <span class="p">{</span><span class="nx">the</span> <span class="nx">thing</span> <span class="nx">itself</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Note the <tt class="code docutils literal"><span class="pre">data</span></tt> can be any JSONable object, including a string.</p>
+<p><strong>TODO:</strong> The <tt class="code docutils literal"><span class="pre">expires</span></tt> key is entirely optional, and allows the server to delete the item (if it has not otherwise been updated).</p>
+<p>The <tt class="code docutils literal"><span class="pre">id</span></tt> key must be unique for the type (submitting another key by the same id means that you are overwriting that object).</p>
+<p>You can also have a deleted object, which lives as an object in sync but doesn&#8217;t have any data:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span><span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;type_name&quot;</span><span class="p">,</span>
+ <span class="nx">id</span><span class="o">:</span> <span class="s2">&quot;unique identifier&quot;</span><span class="p">,</span>
+ <span class="nx">expires</span><span class="o">:</span> <span class="nx">timestamp</span><span class="p">,</span>
+ <span class="nx">deleted</span><span class="o">:</span> <span class="kc">true</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="requests">
+<h2>Requests<a class="headerlink" href="#requests" title="Permalink to this headline">¶</a></h2>
+<p>You can retrieve and send updates.  The first time is simple, you just want to accept whatever the server has: can just do:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="nx">GET</span> <span class="o">/</span><span class="nx">USER</span>
+</pre></div>
+</div>
+<p>This returns the response document:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span><span class="nx">collection_id</span><span class="o">:</span> <span class="s2">&quot;string_id&quot;</span><span class="p">,</span>
+ <span class="nx">objects</span><span class="o">:</span> <span class="p">[[</span><span class="nx">counter1</span><span class="p">,</span> <span class="nx">object1</span><span class="p">],</span> <span class="p">[</span><span class="nx">counter2</span><span class="p">,</span> <span class="nx">object2</span><span class="p">]]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The <tt class="code docutils literal"><span class="pre">collection_id</span></tt> key is only in there because it was not sent with the request; it&#8217;s a kind of &#8220;hello&#8221;.</p>
+<p>Subsequent requests look like:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="nx">GET</span> <span class="o">/</span><span class="nx">USER</span><span class="o">?</span><span class="nx">since</span><span class="o">=</span><span class="nx">counter2</span><span class="o">&amp;</span><span class="nx">collection_id</span><span class="o">=</span><span class="nx">string_id</span>
+</pre></div>
+</div>
+<p>You get the objects back, but with no <tt class="code docutils literal"><span class="pre">collection_id</span></tt> (you already know it!)  If there have been no changes you get back a <tt class="docutils literal"><span class="pre">204</span> <span class="pre">No</span> <span class="pre">Content</span></tt> response.</p>
+<p>If <tt class="code docutils literal"><span class="pre">objects</span></tt> is empty, you start with a counter <tt class="docutils literal"><span class="pre">0</span></tt>.</p>
+<p>If the collection has changed, and your <tt class="docutils literal"><span class="pre">string_id</span></tt> doesn&#8217;t match the server anymore, then you&#8217;ll get:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span><span class="nx">collection_changed</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span>
+ <span class="nx">collection_id</span><span class="o">:</span> <span class="s2">&quot;new_id&quot;</span><span class="p">,</span>
+ <span class="nx">objects</span><span class="o">:</span> <span class="p">[[</span><span class="nx">counter1</span><span class="p">,</span> <span class="p">...],</span> <span class="p">...]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>You should then forget your remembered <tt class="code docutils literal"><span class="pre">since</span></tt> value and all the updates you have sent to the server.  This signals that whatever server or data you were communicating with before is gone.</p>
+<p>When you have updates you want to send, you do:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="nx">POST</span> <span class="o">/</span><span class="nx">USER</span><span class="o">?</span><span class="nx">since</span><span class="o">=</span><span class="nx">counter2</span><span class="o">&amp;</span><span class="nx">collection_id</span><span class="o">=</span><span class="nx">string_id</span>
+
+<span class="p">[{</span><span class="nx">id</span><span class="o">:</span> <span class="s2">&quot;my obj1&quot;</span><span class="p">,</span> <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;thingy&quot;</span><span class="p">,</span> <span class="nx">data</span><span class="o">:</span> <span class="p">{...},</span> <span class="p">...]</span>
+</pre></div>
+</div>
+<p>This may return a <tt class="code docutils literal"><span class="pre">collection_changed</span></tt> error, but also there may have been an update since you last retrieved objects.  This will not do! The <tt class="docutils literal"><span class="pre">since=counter2</span></tt> shows when you last did a GET. If there have been updates you get a new GET-like response:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span><span class="nx">since_invalid</span><span class="o">:</span> <span class="kc">true</span><span class="p">,</span>
+ <span class="nx">objects</span><span class="o">:</span> <span class="p">[[</span><span class="nx">counter3</span><span class="p">,</span> <span class="nx">object</span><span class="p">]]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>You should incorporate the new object (which might conflict some with your own objects, which is why we do all this!), and then resubmit the request:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="nx">POST</span> <span class="o">/</span><span class="nx">USER</span><span class="o">?</span><span class="nx">since</span><span class="o">=</span><span class="nx">counter3</span><span class="o">&amp;</span><span class="nx">collection_id</span><span class="o">=</span><span class="nx">string_id</span>
+<span class="p">...</span>
+</pre></div>
+</div>
+<p>A successful response will be:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span><span class="nx">object_counters</span><span class="o">:</span> <span class="p">[</span><span class="nx">counter4</span><span class="p">,</span> <span class="nx">counter5</span><span class="p">,</span> <span class="p">...]}</span>
+</pre></div>
+</div>
+<p>The counters will correspond to each item that you sent.  You should keep the highest counter as your <tt class="code docutils literal"><span class="pre">since</span></tt> value.  (<strong>Note:</strong> maybe this should include a timestamp of sorts too?)</p>
+</div>
+<div class="section" id="conflicts">
+<h2>Conflicts<a class="headerlink" href="#conflicts" title="Permalink to this headline">¶</a></h2>
+<p>We do not resolve conflicts as part of sync, and you are strongly recommended not to burden your users with conflicts as part of your sync schedule.</p>
+<p>In some cases you can resolve conflicts yourself.  For instance, if the data is not very interesting, you can just choose a winner.</p>
+<p>If you can&#8217;t automatically resolve the conflicts you must incorporate all your conflicting edits into a new object, and when the user at some point can attend to the object you can show them the conflicts and ask for a resolution, putting the resolved object onto the server.</p>
+</div>
+<div class="section" id="partial-results">
+<h2>Partial Results<a class="headerlink" href="#partial-results" title="Permalink to this headline">¶</a></h2>
+<p>You may not want too many results.  In this case add to your GET requests:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="nx">GET</span> <span class="o">/</span><span class="nx">USER</span><span class="o">?</span><span class="p">...</span><span class="o">&amp;</span><span class="nx">limit</span><span class="o">=</span><span class="mi">10</span>
+</pre></div>
+</div>
+<p>This will return at most 10 items.  The server may also choose not to return a full set of items.  In either case the result object will have <tt class="docutils literal"><span class="pre">incomplete:</span> <span class="pre">true</span></tt>.  You can make another request and get more items.</p>
+</div>
+<div class="section" id="typed-results">
+<h2>Typed Results<a class="headerlink" href="#typed-results" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes you only care about a subset of objects.  The stream can have any number of types of objects, and while a full client may handle everything a more limited client may not care about some items. In this case do:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="nx">GET</span> <span class="o">/</span><span class="nx">USER</span><span class="o">?</span><span class="p">...</span><span class="o">&amp;</span><span class="nx">include</span><span class="o">=</span><span class="nx">type1</span><span class="o">&amp;</span><span class="nx">include</span><span class="o">=</span><span class="nx">type2</span>
+</pre></div>
+</div>
+<p>This gives you only <tt class="docutils literal"><span class="pre">type1</span></tt> and <tt class="docutils literal"><span class="pre">type2</span></tt> objects. Instead of opting in to some objects, you can also opt-out with <tt class="docutils literal"><span class="pre">exclude=type1&amp;exclude=type2</span></tt>.</p>
+<p>The response may include <tt class="docutils literal"><span class="pre">until:</span> <span class="pre">&quot;counter3&quot;</span></tt>, which might be newer than the newest item that was returned (this happens when the newest item is not of the type you requested).</p>
+<p>You may also include these same filters on your POST requests; this keeps a conflict from happening even if an object of an excluded type has been added.</p>
+</div>
+<div class="section" id="server-failure-and-backoff">
+<h2>Server Failure and Backoff<a class="headerlink" href="#server-failure-and-backoff" title="Permalink to this headline">¶</a></h2>
+<p>The server may return a 503 response, with a <tt class="docutils literal"><span class="pre">Retry-After</span></tt> value. In any request it may also reply with <tt class="docutils literal"><span class="pre">X-Sync-Poll-Time</span></tt>, which is appended to a successful request but requests that you not make another request for the given time (in seconds).</p>
+</div>
+<div class="section" id="authentication">
+<h2>Authentication<a class="headerlink" href="#authentication" title="Permalink to this headline">¶</a></h2>
+<p>Each request has to have authentication.  The authentication uses BrowserID.  To get authentication information you make a request to:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="nx">POST</span> <span class="o">/</span><span class="nx">DB</span><span class="o">/</span><span class="nx">verify</span>
+
+<span class="nx">assertion</span><span class="o">=</span><span class="p">...</span><span class="o">&amp;</span><span class="nx">audience</span><span class="o">=</span><span class="p">...</span>
+</pre></div>
+</div>
+<p>This will return a JSON response that will indicate how to authenticate future requests, like:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+  <span class="s2">&quot;email&quot;</span><span class="o">:</span> <span class="s2">&quot;user@example.com&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;auth&quot;</span><span class="o">:</span> <span class="p">{</span>
+    <span class="s2">&quot;query&quot;</span><span class="o">:</span> <span class="p">{</span><span class="s2">&quot;auth&quot;</span><span class="o">:</span> <span class="s2">&quot;auth_string&quot;</span><span class="p">}</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>What is in the <tt class="docutils literal"><span class="pre">&quot;auth&quot;</span></tt> key determines what you should do to authenticate future requests.  401 responses indicate you should re-authenticate with a new assertion.</p>
+</div>
+</div>
+<div class="section" id="clients">
+<h1>Clients<a class="headerlink" href="#clients" title="Permalink to this headline">¶</a></h1>
+<p>The client algorithm is to get and put updates, storing them locally. That easy?  Sure!</p>
+<div class="section" id="get">
+<h2>GET<a class="headerlink" href="#get" title="Permalink to this headline">¶</a></h2>
+<p>The client needs to keep a record of these values:</p>
+<ul class="simple">
+<li>The <tt class="code docutils literal"><span class="pre">since</span></tt> counter</li>
+<li>The <tt class="code docutils literal"><span class="pre">collection_id</span></tt></li>
+<li>Authentication</li>
+</ul>
+<p>The <tt class="code docutils literal"><span class="pre">since</span></tt> counter and the <tt class="code docutils literal"><span class="pre">collection_id</span></tt> go together to point to where in the stream of updates the client is.  If the collection changes, that counter becomes meaningless, hence the <tt class="code docutils literal"><span class="pre">collection_id</span></tt> - and when you get a <tt class="code docutils literal"><span class="pre">collection_changed</span></tt> response you should forget your <tt class="code docutils literal"><span class="pre">since</span></tt> value.</p>
+<p>Every time you get a response, you update the <tt class="code docutils literal"><span class="pre">since</span></tt> value if there were updates.  If <tt class="code docutils literal"><span class="pre">until</span></tt> is set on the response, use that, otherwise use the counter from the last item in <tt class="code docutils literal"><span class="pre">objects</span></tt>.  If you get no objects, no until, or a 204 No Content respones, then don&#8217;t change anything.</p>
+<p>You should keep getting stuff so long as the response includes <tt class="docutils literal"><span class="pre">incomplete:</span> <span class="pre">true</span></tt>.  Also Retry-After and X-Sync-Poll-Time should inform the speed at which you make requests.</p>
+</div>
+<div class="section" id="post">
+<h2>POST<a class="headerlink" href="#post" title="Permalink to this headline">¶</a></h2>
+<p>Once you&#8217;ve retrieved the values, then you can send your own new values.  You&#8217;ll send <tt class="docutils literal"><span class="pre">?since={since}</span></tt> just like with GET, because you must always incorporate every value before sending your own.  This ensures that anyone who adds to the sync timeline is fully aware of everything preceding.</p>
+<p>The POST results, when successful, also update <tt class="code docutils literal"><span class="pre">since</span></tt>.  And the POST results when unsuccessful look just like a GET (since you needed to do a GET, right?)</p>
+</div>
+<div class="section" id="quarantine">
+<h2>Quarantine<a class="headerlink" href="#quarantine" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes you may not understand an object you receive; its type, or the format it is in.  This might be because of corruption, but it might also be because another client has a newer/richer notion of the type than you do.</p>
+</div>
+<div class="section" id="blobs">
+<h2>Blobs<a class="headerlink" href="#blobs" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes you will want to store large amount of data with an object, for instance an image.</p>
+<p>You could keep the image (encoded in some fashion, perhaps as a <tt class="docutils literal"><span class="pre">data:</span></tt> URL) stored in the objects themselves.  The problem is that clients <em>must</em> download all objects, and so the update process would requiring downloading the whole image, and would require downloading it during what might otherwise be a simple update, or before adding objects.  The sync model essentially keeps you from doing lazy fetching - something which is usually okay, but not always.</p>
+<p>Instead of storing the object directly in the storage, you can POST an update with the complete blob (in addition to any metadata associated with that blob) and the blob will be stored at a separate URL.  This blob will be managed alongside the object (i.e., updated and deleted with the object).</p>
+<p>To do this, use an object like:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+  <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;image&quot;</span><span class="p">,</span>
+  <span class="nx">id</span><span class="o">:</span> <span class="s2">&quot;pic1&quot;</span><span class="p">,</span>
+  <span class="nx">data</span><span class="o">:</span> <span class="p">{</span>
+    <span class="s2">&quot;description&quot;</span><span class="o">:</span> <span class="s2">&quot;A picture of me and Jim&quot;</span>
+  <span class="p">},</span>
+  <span class="nx">blob</span><span class="o">:</span> <span class="p">{</span>
+    <span class="nx">content_type</span><span class="o">:</span> <span class="s2">&quot;image/jpeg&quot;</span><span class="p">,</span>
+    <span class="nx">data</span><span class="o">:</span> <span class="s2">&quot;base64 encoded image&quot;</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>When <tt class="code docutils literal"><span class="pre">AppData.objectsSaved()</span></tt> is called you&#8217;ll get back something like:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+  <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;image&quot;</span><span class="p">,</span>
+  <span class="nx">id</span><span class="o">:</span> <span class="s2">&quot;pic1&quot;</span><span class="p">,</span>
+  <span class="nx">data</span><span class="o">:</span> <span class="p">{</span>
+    <span class="s2">&quot;description&quot;</span><span class="o">:</span> <span class="s2">&quot;A picture of me and Jim&quot;</span>
+  <span class="p">},</span>
+  <span class="nx">blob</span><span class="o">:</span> <span class="p">{</span>
+    <span class="nx">content_type</span><span class="o">:</span> <span class="s2">&quot;image/jpeg&quot;</span><span class="p">,</span>
+    <span class="nx">href</span><span class="o">:</span> <span class="s2">&quot;http://storage/sync/domain/user/+static/4jD19Fde-D134&quot;</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The URL will still be protected by authentication.  To use the URL you must do <tt class="docutils literal"><span class="pre">url</span> <span class="pre">=</span> <span class="pre">sync.authenticateUrl(object.blob.href)</span></tt></p>
+<p>If you make an update you can (and must!) keep the <tt class="docutils literal"><span class="pre">blob:</span> <span class="pre">{content_type:</span> <span class="pre">...,</span> <span class="pre">href:</span> <span class="pre">...}</span></tt> portion of the object; however, you do not need to upload new blob data with each update.</p>
+<p>Note the URL will be controlled by CORS headers, so you can access its content with an XMLHttpRequest.</p>
+</div>
+</div>
+
+
+                    
+                        <div id="disqus_thread"></div>
+                        <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+                    
+                </div>
+                <div class="span3">
+                    
+        <div class="sphinxsidebar">
+            <div class="sphinxsidebarwrapper">
+                  <ul class="nav nav-list">
+                    <li class="nav-header">The Cut-Out Docs</li>
+                    <li><a href="quickstart.html">Quick Start</a></li>
+<li><a href="library.html">Library Docs</a></li>
+
+<li><a href="design.html">Design Rationale</a></li>
+
+                  </ul>
+  <!-- <h3>The Cut-Out</h3> -->
+  <ul class="nav nav-list">
+<li class="active"><a class="reference internal" href="#">Protocol</a><ul>
+<li><a class="reference internal" href="#expectations">Expectations</a></li>
+<li><a class="reference internal" href="#objects">Objects</a></li>
+<li><a class="reference internal" href="#requests">Requests</a></li>
+<li><a class="reference internal" href="#conflicts">Conflicts</a></li>
+<li><a class="reference internal" href="#partial-results">Partial Results</a></li>
+<li><a class="reference internal" href="#typed-results">Typed Results</a></li>
+<li><a class="reference internal" href="#server-failure-and-backoff">Server Failure and Backoff</a></li>
+<li><a class="reference internal" href="#authentication">Authentication</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#clients">Clients</a><ul>
+<li><a class="reference internal" href="#get">GET</a></li>
+<li><a class="reference internal" href="#post">POST</a></li>
+<li><a class="reference internal" href="#quarantine">Quarantine</a></li>
+<li><a class="reference internal" href="#blobs">Blobs</a></li>
+</ul>
+</li>
+</ul>
+
+            </div>
+        </div>
+                </div>
+            
+        </div>
+    </div>
+    <div class="footer">
+        
+        <div class="container">
+        </div>
+    </div>
+
+
+    <!-- disqus -->
+    <script type="text/javascript">
+        var disqus_title = 'Protocol &mdash; The Cut-Out';
+        var disqus_identifier ='code' + '.' + "thecutout" + window.location.pathname.replace('/', '.');
+    </script>
+
+    <script type="text/javascript">
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = "thecutout"; // required: replace example with your forum shortname
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+
+
+<script type="text/javascript">
+    $('.nav .active').on('click', function () {
+        e.preventDefault()
+        $(this).siblings().toggle()
+    });
+</script>
+
+<!-- plusone -->
+<script type="text/javascript">
+    (function () {
+        var po = document.createElement('script');
+        po.type = 'text/javascript';
+        po.async = true;
+        po.src = 'https://apis.google.com/js/plusone.js';
+        var s = document.getElementsByTagName('script')[0];
+        s.parentNode.insertBefore(po, s);
+    })();
+</script>
+
+<!-- twitter -->
+<script src="http://platform.twitter.com/widgets.js" type="text/javascript"></script>
+
+</body>
+</html>

@@ -1,0 +1,297 @@
+
+<!DOCTYPE html><html>
+<head>
+    <meta http-equiv="Content-Type"
+          content="text/html; charset=utf-8"/>
+    
+        <title>Library Documentation &mdash; The Cut-Out</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href='http://fonts.googleapis.com/css?family=Crete+Round' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="_static/sphinx-bootstrap.css" type="text/css"/>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css"/>
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+        <script type="text/javascript">
+            var DOCUMENTATION_OPTIONS = {
+                URL_ROOT:'',
+                VERSION:'0.1',
+                COLLAPSE_INDEX:false,
+                FILE_SUFFIX:'.html',
+                HAS_SOURCE:  true
+            };
+        </script>
+            <script type="text/javascript" src="_static/jquery.js"></script>
+            <script type="text/javascript" src="_static/underscore.js"></script>
+            <script type="text/javascript" src="_static/doctools.js"></script>
+            <script type="text/javascript" src="_static/bootstrap-dropdown.js"></script>
+        <link rel="top" title="The Cut-Out" href="./"/> 
+    <script type="text/javascript" src="https://apis.google.com/js/plusone.js"></script>
+    
+        <!-- analytics -->
+        <script type="text/javascript">
+            var _gaq = _gaq || [];
+            _gaq.push(['_setAccount', 'UA-6731441-13']);
+            
+            _gaq.push(['_trackPageview']);
+
+            (function () {
+                var ga = document.createElement('script');
+                ga.type = 'text/javascript';
+                ga.async = true;
+                ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+                var s = document.getElementsByTagName('script')[0];
+                s.parentNode.insertBefore(ga, s);
+            })();
+        </script>
+    
+</head>
+<body>
+
+    <div class="navbar navbar-static-top">
+        <div class="navbar-inner">
+            <div class="container">
+
+    <div class="related">
+        <ul class="nav">
+                <li class=""><a class="brand" href="./">The Cut-Out</a></li>
+                <li><a href="quickstart.html">Quick Start</a></li>
+<li class="active"><a href="library.html">Library Docs</a></li>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="design.html">Design Rationale</a></li>
+ 
+        </ul>
+    </div>
+                <div class="pull-right">
+                    
+        <form class="navbar-search" action="search.html"
+              method="get">
+            <input type="text" name="q" placeholder="search"/>
+            <input type="hidden" name="check_keywords" value="yes"/>
+            <input type="hidden" name="area" value="default"/>
+        </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+<ul class="quick-links">
+    <li><strong>Quick links</strong></li>
+    <li>
+        <a href="https://github.com/ianb/thecutout/">GitHub</a>
+    </li>
+    <li>
+        <a href="https://github.com/ianb/thecutout/issues?state=open">Issues</a>
+    </li>
+    <li class="divider">&middot;</li>
+    <li>
+        <iframe class="github-btn"
+                src="http://ghbtns.com/github-btn.html?user=ianb&repo=thecutout&type=watch&count=true"
+                allowtransparency="true" frameborder="0" scrolling="0"
+                width="110px" height="20px"></iframe>
+    </li>
+    <li>
+        <iframe class="github-btn"
+                src="http://ghbtns.com/github-btn.html?user=ianb&repo=thecutout&type=fork&count=true"
+                allowtransparency="true" frameborder="0" scrolling="0"
+                width="94px" height="20px"></iframe>
+    </li>
+
+    <li class="divider">&middot;</li>
+    <li class="follow-btn">
+        <a href="https://twitter.com/ianbicking"
+           class="twitter-follow-button" data-width="145px"
+           data-link-color="#0069D6" data-show-count="false">Follow
+            @ianbicking</a>
+    </li>
+    <li class="tweet-btn">
+        <a href="https://twitter.com/share" class="twitter-share-button"
+           data-url="http://thecutout.org" data-count="horizontal"
+           data-via="twbootstrap"
+           data-related="ianbicking:Creator of The Cut-Out">Tweet</a>
+    </li>
+    <li class="plusone-container">
+        <g:plusone size="medium"></g:plusone>
+    </li>
+</ul>  
+    <div class="container">
+        <div class="content row">
+                <div class="span9">
+                    
+  <div class="section" id="library-documentation">
+<h1>Library Documentation<a class="headerlink" href="#library-documentation" title="Permalink to this headline">¶</a></h1>
+<p>The library is present in <tt class="code docutils literal"><span class="pre">syncclient.js</span></tt>.  While there are several internals that you could poke around with, the &#8220;simple&#8221; version is just one function, <tt class="docutils literal"><span class="pre">new</span> <span class="pre">Sync(appData,</span> <span class="pre">{options})</span></tt> which returns a sync object.</p>
+<div class="section" id="appdata">
+<h2>appData<a class="headerlink" href="#appdata" title="Permalink to this headline">¶</a></h2>
+<p>This is the object that tells the sync service how to interact with your data.  This object has three important methods:</p>
+<div class="section" id="appdata-getpendingobjects-callback">
+<h3><tt class="code docutils literal"><span class="pre">appData.getPendingObjects(callback)</span></tt><a class="headerlink" href="#appdata-getpendingobjects-callback" title="Permalink to this headline">¶</a></h3>
+<p>This should return all the <em>new</em> objects in your application.  You have to keep track yourself of when objects have been saved before, or if they&#8217;ve been updated, or if they&#8217;ve been deleted.</p>
+<p>Your function should call <tt class="docutils literal"><span class="pre">callback(null,</span> <span class="pre">[objects])</span></tt> (the objects could be an empty list).  The return value does not matter.</p>
+<p>Each object should look like:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+  <span class="nx">id</span><span class="o">:</span> <span class="s2">&quot;some stable id&quot;</span><span class="p">,</span>
+  <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;type-of-object&quot;</span><span class="p">,</span>
+  <span class="nx">data</span><span class="o">:</span> <span class="p">{</span><span class="nx">some</span> <span class="nx">data</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The <tt class="code docutils literal"><span class="pre">id</span></tt> is something you should make yourself, but it should distinguish between updates and new objects.  Creating an ID with a UUID is perfectly fine, so long as you make that ID persistent.  The id should be a string or integer.</p>
+<p>The <tt class="code docutils literal"><span class="pre">type</span></tt> is just the kind of the object.  It should be a string.</p>
+<p>The <tt class="code docutils literal"><span class="pre">data</span></tt> is the actual data.  Some JSONable object.</p>
+<p>If you have a deleted object, you should represent it like:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+  <span class="nx">id</span><span class="o">:</span> <span class="s2">&quot;some stable id&quot;</span><span class="p">,</span>
+  <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;type-of-object&quot;</span><span class="p">,</span>
+  <span class="nx">deleted</span><span class="o">:</span> <span class="kc">true</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Note that having returned these objects, they may not get used!</p>
+</div>
+<div class="section" id="appdata-objectssaved-objects">
+<h3><tt class="code docutils literal"><span class="pre">appData.objectsSaved(objects)</span></tt><a class="headerlink" href="#appdata-objectssaved-objects" title="Permalink to this headline">¶</a></h3>
+<p>This method indicates that the objects (as returned from <tt class="code docutils literal"><span class="pre">getPendingObjects</span></tt> have actually been saved.  You should store something with the objects showing that they are saved, so you don&#8217;t return them in future calls to <tt class="code docutils literal"><span class="pre">getPendingObjects</span></tt>.</p>
+<p>Note that attempts to upload objects can fail, so the results of <tt class="code docutils literal"><span class="pre">getPendingObjects</span></tt> may be discarded and retrieved later for another attempt.  Typically such a case will result in a sequence of getPendingObjects, objectsReceived, getPendingObjects again, and finally objectsSaved.</p>
+<p>Note if you use blobs, you should check for the <tt class="code docutils literal"><span class="pre">href</span></tt> of the object, which will have been set after saving.  You can still keep the source of the blob around if you want, or remove it and rely on the remote/linked blob.</p>
+</div>
+<div class="section" id="appdata-objectsreceived-objects">
+<h3><tt class="code docutils literal"><span class="pre">appData.objectsReceived(objects)</span></tt><a class="headerlink" href="#appdata-objectsreceived-objects" title="Permalink to this headline">¶</a></h3>
+<p>This happens when a new object has appeared on the server.  The objects are formatted just as above, and probably came from another instance of your application.</p>
+<p>These objects can include updates, new objects, and deletes.</p>
+</div>
+<div class="section" id="appdata-status-message">
+<h3><tt class="code docutils literal"><span class="pre">appData.status(message)</span></tt><a class="headerlink" href="#appdata-status-message" title="Permalink to this headline">¶</a></h3>
+<p>This not-really-documented optional method is called to indicate things that are happening with the sync service.  You could maybe use it to indicate the sync status in the UI somewhere.</p>
+</div>
+<div class="section" id="appdata-resetsaved">
+<h3><tt class="code docutils literal"><span class="pre">appData.resetSaved()</span></tt><a class="headerlink" href="#appdata-resetsaved" title="Permalink to this headline">¶</a></h3>
+<p>This is called when the server is switched out somehow, and you should erase all information about what objects have been saved in the past. This is done before starting a new from-scratch sync.</p>
+</div>
+<div class="section" id="appdata-reportobjecterrors">
+<h3><tt class="code docutils literal"><span class="pre">appData.reportObjectErrors()</span></tt><a class="headerlink" href="#appdata-reportobjecterrors" title="Permalink to this headline">¶</a></h3>
+<p>This optional method is called if <tt class="code docutils literal"><span class="pre">getPendingObjects</span></tt> returns a bad object.</p>
+</div>
+<div class="section" id="appdata-onupdate">
+<h3><tt class="code docutils literal"><span class="pre">appData.onupdate</span></tt><a class="headerlink" href="#appdata-onupdate" title="Permalink to this headline">¶</a></h3>
+<p>This attribute will be set by the sync service, so long as the attribute exists (if you don&#8217;t define it, it won&#8217;t be set - even setting it to <tt class="code docutils literal"><span class="pre">null</span></tt> is sufficient).  You are encouraged, but not required, to call this when the data changes.  This will cause the sync process to trigger soon, updating the server with the new data.</p>
+</div>
+</div>
+<div class="section" id="options">
+<h2>options<a class="headerlink" href="#options" title="Permalink to this headline">¶</a></h2>
+<p>There are a couple options to <tt class="docutils literal"><span class="pre">Sync(appData,</span> <span class="pre">{options})</span></tt>:</p>
+<p><tt class="code docutils literal"><span class="pre">assertion</span></tt>: a browerid/persona assertion to login with.  If you don&#8217;t provide this, then the service is started in a potentially not-logged-in state and you may have to call <tt class="code docutils literal"><span class="pre">navigator.id.request()</span></tt> to trigger a login.</p>
+<p><tt class="code docutils literal"><span class="pre">appName</span></tt>: this is the name of your app.  This is important only if your domain has multiple distinct apps.</p>
+</div>
+<div class="section" id="sync-object">
+<h2>Sync object<a class="headerlink" href="#sync-object" title="Permalink to this headline">¶</a></h2>
+<p>The object returned as some methods:</p>
+<p><tt class="code docutils literal"><span class="pre">lastSyncTime()</span></tt>: returns the timestamp (milliseconds) of the last successful sync.</p>
+<p><tt class="code docutils literal"><span class="pre">scheduleImmediately()</span></tt>: try to do a sync right away.</p>
+<p><tt class="code docutils literal"><span class="pre">resetSchedule()</span></tt>: reset the period polling to a normal pace.</p>
+<p><tt class="code docutils literal"><span class="pre">scheduleSlowly()</span></tt>: slow down the polling.</p>
+<p><tt class="code docutils literal"><span class="pre">activate()/deactivate()</span></tt>: activate or deactivate the scheduler. Before you retire a sync object you should call <tt class="code docutils literal"><span class="pre">sync.deactivate()</span></tt>. The scheduler is automatically activated on startup.  The polling frequency is automatically adjusted based on whether the tab is in the background or not.</p>
+<p><tt class="code docutils literal"><span class="pre">request()</span></tt>: ask to get authentication (this is identicaly to <tt class="code docutils literal"><span class="pre">navigator.id.request()</span></tt>)</p>
+<p><tt class="code docutils literal"><span class="pre">logout()</span></tt>: get rid of all authentication information.</p>
+<p><tt class="code docutils literal"><span class="pre">toggleLogin()</span></tt>: if logged in, then log out.  If logged out, then request login.</p>
+<p><tt class="code docutils literal"><span class="pre">watch(options)</span></tt>: similar to <tt class="code docutils literal"><span class="pre">navigator.id.watch()</span></tt> but is called after server verification is done.  The <tt class="code docutils literal"><span class="pre">onlogin</span></tt> method is called with <tt class="code docutils literal"><span class="pre">onlogin(email,</span> <span class="pre">completeData)</span></tt> (not an assertion).  Note this uses cached credentials, unlike <tt class="code docutils literal"><span class="pre">navigator.id.watch()</span></tt>.</p>
+<p><tt class="code docutils literal"><span class="pre">reset(callback)</span></tt>: forgets all information about synchronization. This doesn&#8217;t get rid of anything on the server, but does cause the next sync to start from scratch.</p>
+<p><tt class="code docutils literal"><span class="pre">authentiateUrl(url)</span></tt>: takes a URL (for a <tt class="docutils literal"><span class="pre">blob.href</span></tt>) and adds authenticating information to it.</p>
+</div>
+</div>
+
+
+                    
+                        <div id="disqus_thread"></div>
+                        <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+                    
+                </div>
+                <div class="span3">
+                    
+        <div class="sphinxsidebar">
+            <div class="sphinxsidebarwrapper">
+                  <ul class="nav nav-list">
+                    <li class="nav-header">The Cut-Out Docs</li>
+                    <li><a href="quickstart.html">Quick Start</a></li>
+
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="design.html">Design Rationale</a></li>
+
+                  </ul>
+  <!-- <h3>The Cut-Out</h3> -->
+  <ul class="nav nav-list">
+<li class="active"><a class="reference internal" href="#">Library Documentation</a><ul>
+<li><a class="reference internal" href="#appdata">appData</a><ul>
+<li><a class="reference internal" href="#appdata-getpendingobjects-callback"><tt class="code docutils literal"><span class="pre">appData.getPendingObjects(callback)</span></tt></a></li>
+<li><a class="reference internal" href="#appdata-objectssaved-objects"><tt class="code docutils literal"><span class="pre">appData.objectsSaved(objects)</span></tt></a></li>
+<li><a class="reference internal" href="#appdata-objectsreceived-objects"><tt class="code docutils literal"><span class="pre">appData.objectsReceived(objects)</span></tt></a></li>
+<li><a class="reference internal" href="#appdata-status-message"><tt class="code docutils literal"><span class="pre">appData.status(message)</span></tt></a></li>
+<li><a class="reference internal" href="#appdata-resetsaved"><tt class="code docutils literal"><span class="pre">appData.resetSaved()</span></tt></a></li>
+<li><a class="reference internal" href="#appdata-reportobjecterrors"><tt class="code docutils literal"><span class="pre">appData.reportObjectErrors()</span></tt></a></li>
+<li><a class="reference internal" href="#appdata-onupdate"><tt class="code docutils literal"><span class="pre">appData.onupdate</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#options">options</a></li>
+<li><a class="reference internal" href="#sync-object">Sync object</a></li>
+</ul>
+</li>
+</ul>
+
+            </div>
+        </div>
+                </div>
+            
+        </div>
+    </div>
+    <div class="footer">
+        
+        <div class="container">
+        </div>
+    </div>
+
+
+    <!-- disqus -->
+    <script type="text/javascript">
+        var disqus_title = 'Library Documentation &mdash; The Cut-Out';
+        var disqus_identifier ='code' + '.' + "thecutout" + window.location.pathname.replace('/', '.');
+    </script>
+
+    <script type="text/javascript">
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = "thecutout"; // required: replace example with your forum shortname
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+
+
+<script type="text/javascript">
+    $('.nav .active').on('click', function () {
+        e.preventDefault()
+        $(this).siblings().toggle()
+    });
+</script>
+
+<!-- plusone -->
+<script type="text/javascript">
+    (function () {
+        var po = document.createElement('script');
+        po.type = 'text/javascript';
+        po.async = true;
+        po.src = 'https://apis.google.com/js/plusone.js';
+        var s = document.getElementsByTagName('script')[0];
+        s.parentNode.insertBefore(po, s);
+    })();
+</script>
+
+<!-- twitter -->
+<script src="http://platform.twitter.com/widgets.js" type="text/javascript"></script>
+
+</body>
+</html>

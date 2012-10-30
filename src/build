@@ -1,2 +1,4 @@
 #!/bin/sh
-sphinx-build . ..
+sphinx-build "$@" . ..
+sed -i '' 's!/index.html"!/"!g' ../*.html
+sed -i '' 's!"index.html"!"./"!g' ../*.html

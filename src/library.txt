@@ -1,0 +1,115 @@
+Library Documentation
+---------------------
+
+The library is present in `syncclient.js`.  While there are several internals that you could poke around with, the "simple" version is just one function, ``new Sync(appData, {options})`` which returns a sync object.
+
+appData
+~~~~~~~
+
+This is the object that tells the sync service how to interact with your data.  This object has three important methods:
+
+`appData.getPendingObjects(callback)`
++++++++++++++++++++++++++++++++++++++++
+
+This should return all the *new* objects in your application.  You have to keep track yourself of when objects have been saved before, or if they've been updated, or if they've been deleted.
+
+Your function should call ``callback(null, [objects])`` (the objects could be an empty list).  The return value does not matter.
+
+Each object should look like::
+
+    {
+      id: "some stable id",
+      type: "type-of-object",
+      data: {some data}
+    }
+
+The `id` is something you should make yourself, but it should distinguish between updates and new objects.  Creating an ID with a UUID is perfectly fine, so long as you make that ID persistent.  The id should be a string or integer.
+
+The `type` is just the kind of the object.  It should be a string.
+
+The `data` is the actual data.  Some JSONable object.
+
+If you have a deleted object, you should represent it like::
+
+    {
+      id: "some stable id",
+      type: "type-of-object",
+      deleted: true
+    }
+
+Note that having returned these objects, they may not get used!
+
+
+`appData.objectsSaved(objects)`
++++++++++++++++++++++++++++++++++
+
+This method indicates that the objects (as returned from `getPendingObjects` have actually been saved.  You should store something with the objects showing that they are saved, so you don't return them in future calls to `getPendingObjects`.
+
+Note that attempts to upload objects can fail, so the results of `getPendingObjects` may be discarded and retrieved later for another attempt.  Typically such a case will result in a sequence of getPendingObjects, objectsReceived, getPendingObjects again, and finally objectsSaved.
+
+Note if you use blobs, you should check for the `href` of the object, which will have been set after saving.  You can still keep the source of the blob around if you want, or remove it and rely on the remote/linked blob.
+
+`appData.objectsReceived(objects)`
+++++++++++++++++++++++++++++++++++++
+
+This happens when a new object has appeared on the server.  The objects are formatted just as above, and probably came from another instance of your application.
+
+These objects can include updates, new objects, and deletes.
+
+`appData.status(message)`
++++++++++++++++++++++++++++
+
+This not-really-documented optional method is called to indicate things that are happening with the sync service.  You could maybe use it to indicate the sync status in the UI somewhere.
+
+`appData.resetSaved()`
+++++++++++++++++++++++++
+
+This is called when the server is switched out somehow, and you should erase all information about what objects have been saved in the past. This is done before starting a new from-scratch sync.
+
+`appData.reportObjectErrors()`
+++++++++++++++++++++++++++++++++
+
+This optional method is called if `getPendingObjects` returns a bad object.
+
+`appData.onupdate`
+++++++++++++++++++++
+
+This attribute will be set by the sync service, so long as the attribute exists (if you don't define it, it won't be set - even setting it to `null` is sufficient).  You are encouraged, but not required, to call this when the data changes.  This will cause the sync process to trigger soon, updating the server with the new data.
+
+
+options
+~~~~~~~
+
+There are a couple options to ``Sync(appData, {options})``:
+
+`assertion`: a browerid/persona assertion to login with.  If you don't provide this, then the service is started in a potentially not-logged-in state and you may have to call `navigator.id.request()` to trigger a login.
+
+`appName`: this is the name of your app.  This is important only if your domain has multiple distinct apps.
+
+
+Sync object
+~~~~~~~~~~~
+
+The object returned as some methods:
+
+`lastSyncTime()`: returns the timestamp (milliseconds) of the last successful sync.
+
+`scheduleImmediately()`: try to do a sync right away.
+
+`resetSchedule()`: reset the period polling to a normal pace.
+
+`scheduleSlowly()`: slow down the polling.
+
+`activate()/deactivate()`: activate or deactivate the scheduler. Before you retire a sync object you should call `sync.deactivate()`. The scheduler is automatically activated on startup.  The polling frequency is automatically adjusted based on whether the tab is in the background or not.
+
+`request()`: ask to get authentication (this is identicaly to `navigator.id.request()`)
+
+`logout()`: get rid of all authentication information.
+
+`toggleLogin()`: if logged in, then log out.  If logged out, then request login.
+
+`watch(options)`: similar to `navigator.id.watch()` but is called after server verification is done.  The `onlogin` method is called with `onlogin(email, completeData)` (not an assertion).  Note this uses cached credentials, unlike `navigator.id.watch()`.
+
+`reset(callback)`: forgets all information about synchronization. This doesn't get rid of anything on the server, but does cause the next sync to start from scratch.
+
+`authentiateUrl(url)`: takes a URL (for a ``blob.href``) and adds authenticating information to it.

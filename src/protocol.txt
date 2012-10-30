@@ -1,0 +1,237 @@
+Protocol
+--------
+
+Expectations
+~~~~~~~~~~~~
+
+The model of sync is a stream of updates.  All clients both put their local updates into this stream, and read the collective stream. Everything has to be represented as a concrete item in the stream, meaning that delete actions are also present in the stream.
+
+There is no conflict resolution, so clients must make sure they do not overwrite each other's updates.  If a conflict cannot be resolved without interaction (e.g., simple overwrite is not considered acceptable, and automatic merging is not possible) then it must be possible to represent the conflicted state directly, and at some point some client can resolve the conflict (possibly with user interaction) and put the unconflicted object into the stream.
+
+The stream is ordered, along a single timeline.  The timeline markers should *not* be seen as based on any time or clock, as this leads to confusion and it's not clear whose "now" we are talking about. Instead the server has a counter, and all clients work from that counter. (The counter need not be an uninterrupted stream of integers, just increasing.)
+
+All interaction between client and server should happen without user intervention.  Everything is expected to be highly asynchronous, and the server may reject requests or be unavailable for short periods of time, and this should not affect user experience.
+
+We expect for a new client to be able to create a good-enough duplicate of the data in other clients.  "Good-enough" because some data might be kept by clients but expired by the server because it was marked as not being permanently interesting.
+
+**TODO:** For "known" datatypes the sync server ensures the integrity of data, according to the most up-to-date notion of correctness for the data type.  As such the sync server must be updated frequently, but clients will be protected from some other rogue clients. ('''Note:''' not sure if this is a practical expectation?)
+
+We'll go out-of-order time-wise, and forget about authentication for now.
+
+Everything happens at a single URL endpoint, we'll call it ``/USER``
+
+Objects
+~~~~~~~
+
+Each object looks like this::
+
+    {type: "type_name",
+     id: "unique identifier among objects of this type",
+     expires: timestamp,
+     data: {the thing itself}
+    }
+
+Note the `data` can be any JSONable object, including a string.
+
+**TODO:** The `expires` key is entirely optional, and allows the server to delete the item (if it has not otherwise been updated).
+
+The `id` key must be unique for the type (submitting another key by the same id means that you are overwriting that object).
+
+You can also have a deleted object, which lives as an object in sync but doesn't have any data::
+
+    {type: "type_name",
+     id: "unique identifier",
+     expires: timestamp,
+     deleted: true
+    }
+
+
+Requests
+~~~~~~~~
+
+You can retrieve and send updates.  The first time is simple, you just want to accept whatever the server has: can just do::
+
+    GET /USER
+
+This returns the response document::
+
+    {collection_id: "string_id",
+     objects: [[counter1, object1], [counter2, object2]]
+    }
+
+The `collection_id` key is only in there because it was not sent with the request; it's a kind of "hello".
+
+Subsequent requests look like::
+
+    GET /USER?since=counter2&collection_id=string_id
+
+You get the objects back, but with no `collection_id` (you already know it!)  If there have been no changes you get back a ``204 No Content`` response.
+
+If `objects` is empty, you start with a counter ``0``.
+
+If the collection has changed, and your ``string_id`` doesn't match the server anymore, then you'll get::
+
+    {collection_changed: true,
+     collection_id: "new_id",
+     objects: [[counter1, ...], ...]
+    }
+
+You should then forget your remembered `since` value and all the updates you have sent to the server.  This signals that whatever server or data you were communicating with before is gone.
+
+When you have updates you want to send, you do::
+
+    POST /USER?since=counter2&collection_id=string_id
+
+    [{id: "my obj1", type: "thingy", data: {...}, ...]
+
+This may return a `collection_changed` error, but also there may have been an update since you last retrieved objects.  This will not do! The ``since=counter2`` shows when you last did a GET. If there have been updates you get a new GET-like response::
+
+    {since_invalid: true,
+     objects: [[counter3, object]]
+    }
+
+You should incorporate the new object (which might conflict some with your own objects, which is why we do all this!), and then resubmit the request::
+
+    POST /USER?since=counter3&collection_id=string_id
+    ...
+
+A successful response will be::
+
+    {object_counters: [counter4, counter5, ...]}
+
+The counters will correspond to each item that you sent.  You should keep the highest counter as your `since` value.  (**Note:** maybe this should include a timestamp of sorts too?)
+
+
+
+Conflicts
+~~~~~~~~~
+
+We do not resolve conflicts as part of sync, and you are strongly recommended not to burden your users with conflicts as part of your sync schedule.
+
+In some cases you can resolve conflicts yourself.  For instance, if the data is not very interesting, you can just choose a winner.
+
+If you can't automatically resolve the conflicts you must incorporate all your conflicting edits into a new object, and when the user at some point can attend to the object you can show them the conflicts and ask for a resolution, putting the resolved object onto the server.
+
+
+Partial Results
+~~~~~~~~~~~~~~~
+
+You may not want too many results.  In this case add to your GET requests::
+
+    GET /USER?...&limit=10
+
+This will return at most 10 items.  The server may also choose not to return a full set of items.  In either case the result object will have ``incomplete: true``.  You can make another request and get more items.
+
+Typed Results
+~~~~~~~~~~~~~
+
+Sometimes you only care about a subset of objects.  The stream can have any number of types of objects, and while a full client may handle everything a more limited client may not care about some items. In this case do::
+
+    GET /USER?...&include=type1&include=type2
+
+This gives you only ``type1`` and ``type2`` objects. Instead of opting in to some objects, you can also opt-out with ``exclude=type1&exclude=type2``.
+
+The response may include ``until: "counter3"``, which might be newer than the newest item that was returned (this happens when the newest item is not of the type you requested).
+
+You may also include these same filters on your POST requests; this keeps a conflict from happening even if an object of an excluded type has been added.
+
+
+Server Failure and Backoff
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The server may return a 503 response, with a ``Retry-After`` value. In any request it may also reply with ``X-Sync-Poll-Time``, which is appended to a successful request but requests that you not make another request for the given time (in seconds).
+
+Authentication
+~~~~~~~~~~~~~~
+
+Each request has to have authentication.  The authentication uses BrowserID.  To get authentication information you make a request to::
+
+    POST /DB/verify
+
+    assertion=...&audience=...
+
+This will return a JSON response that will indicate how to authenticate future requests, like::
+
+    {
+      "email": "user@example.com",
+      "auth": {
+        "query": {"auth": "auth_string"}
+      }
+    }
+
+What is in the ``"auth"`` key determines what you should do to authenticate future requests.  401 responses indicate you should re-authenticate with a new assertion.
+
+Clients
+-------
+
+The client algorithm is to get and put updates, storing them locally. That easy?  Sure!
+
+GET
+~~~
+
+The client needs to keep a record of these values:
+
+* The `since` counter
+* The `collection_id`
+* Authentication
+
+The `since` counter and the `collection_id` go together to point to where in the stream of updates the client is.  If the collection changes, that counter becomes meaningless, hence the `collection_id` - and when you get a `collection_changed` response you should forget your `since` value.
+
+Every time you get a response, you update the `since` value if there were updates.  If `until` is set on the response, use that, otherwise use the counter from the last item in `objects`.  If you get no objects, no until, or a 204 No Content respones, then don't change anything.
+
+You should keep getting stuff so long as the response includes ``incomplete: true``.  Also Retry-After and X-Sync-Poll-Time should inform the speed at which you make requests.
+
+POST
+~~~~
+
+Once you've retrieved the values, then you can send your own new values.  You'll send ``?since={since}`` just like with GET, because you must always incorporate every value before sending your own.  This ensures that anyone who adds to the sync timeline is fully aware of everything preceding.
+
+The POST results, when successful, also update `since`.  And the POST results when unsuccessful look just like a GET (since you needed to do a GET, right?)
+
+Quarantine
+~~~~~~~~~~
+
+Sometimes you may not understand an object you receive; its type, or the format it is in.  This might be because of corruption, but it might also be because another client has a newer/richer notion of the type than you do.
+
+Blobs
+~~~~~
+
+Sometimes you will want to store large amount of data with an object, for instance an image.
+
+You could keep the image (encoded in some fashion, perhaps as a ``data:`` URL) stored in the objects themselves.  The problem is that clients *must* download all objects, and so the update process would requiring downloading the whole image, and would require downloading it during what might otherwise be a simple update, or before adding objects.  The sync model essentially keeps you from doing lazy fetching - something which is usually okay, but not always.
+
+Instead of storing the object directly in the storage, you can POST an update with the complete blob (in addition to any metadata associated with that blob) and the blob will be stored at a separate URL.  This blob will be managed alongside the object (i.e., updated and deleted with the object).
+
+To do this, use an object like::
+
+    {
+      type: "image",
+      id: "pic1",
+      data: {
+        "description": "A picture of me and Jim"
+      },
+      blob: {
+        content_type: "image/jpeg",
+        data: "base64 encoded image"
+      }
+    }
+
+When `AppData.objectsSaved()` is called you'll get back something like::
+
+    {
+      type: "image",
+      id: "pic1",
+      data: {
+        "description": "A picture of me and Jim"
+      },
+      blob: {
+        content_type: "image/jpeg",
+        href: "http://storage/sync/domain/user/+static/4jD19Fde-D134"
+      }
+    }
+
+The URL will still be protected by authentication.  To use the URL you must do ``url = sync.authenticateUrl(object.blob.href)``
+
+If you make an update you can (and must!) keep the ``blob: {content_type: ..., href: ...}`` portion of the object; however, you do not need to upload new blob data with each update.
+
+Note the URL will be controlled by CORS headers, so you can access its content with an XMLHttpRequest.

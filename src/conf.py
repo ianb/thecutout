@@ -11,7 +11,8 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import sys, os
+import sys
+import os
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -92,17 +93,45 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 sys.path.append(os.path.abspath('sphinx-bootstrap'))
+import re
+
+
+def repl_out_name(name):
+    return re.sub(r'<li><a href="%s\.[a-z]+">.*?</a></li>' % re.escape(name),
+                  '', link_list)
+
+
+def make_name_active(name):
+    regex = r'<li><a href="%s\.html">' % re.escape(name)
+    return re.sub(regex,
+                  '<li class="active"><a href="%s.html">' % name,
+                  link_list)
+
+## html_context gets pickled, so I can't put a funciton in here:
+html_context = {
+    #'repl_out_name': repl_out_name,
+    }
+
 html_theme_path = ['sphinx-bootstrap', '_theme']
 html_theme = 'sphinx-bootstrap'
+link_list = """\
+<li><a href="quickstart.html">Quick Start</a></li>
+<li><a href="library.html">Library Docs</a></li>
+<li><a href="protocol.html">Protocol</a></li>
+<li><a href="design.html">Design Rationale</a></li>
+"""
 html_theme_options = {
     'analytics_code': 'UA-6731441-13',
     'github_user': 'ianb',
     'github_repo': 'thecutout',
     'twitter_username': 'ianbicking',
     'home_url': 'http://thecutout.org',
-    #'disqus_shortname': 'scotchmedia',
+    'disqus_shortname': 'thecutout',
+    'link_list': link_list,
+    'repl_out_name': repl_out_name,
+    'make_name_active': make_name_active,
 }
-                        
+
 highlight_language = "javascript"
 
 
@@ -155,13 +184,13 @@ html_use_index = False
 #html_split_index = False
 
 # If true, links to the reST sources are added to the pages.
-#html_show_sourcelink = True
+html_show_sourcelink = False
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
 html_show_sphinx = False
 
 # If true, "(C) Copyright ..." is shown in the HTML footer. Default is True.
-#html_show_copyright = True
+html_show_copyright = False
 
 # If true, an OpenSearch description file will be output, and all pages will
 # contain a <link> tag referring to it.  The value of this option must be the

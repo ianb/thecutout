@@ -1,0 +1,39 @@
+Design Rationale
+================
+
+Why Not REST?
+-------------
+
+If you look at the `protocol <protocol.html>`_ you might notice that it doesn't conform to any of the ideas of `REST <http://en.wikipedia.org/wiki/Representational_state_transfer>`_.  It doesn't use status codes for much, it only uses hypertext a little (for blobs), and there's really just one URL endpoint.
+
+The protocol is designed with the sync algorithm in mind.  When the client makes a request, the server determines what information it might need, and sends that information.  Using standard HTTP response codes leads to a more chatty protocol, where a request is rejected or a different request is suggested, and then the client has to make that new request.
+
+The request overhead is one request to authenticate (which only needs to be done occasionally), one request to get or check for any updates, and one request to push any updates.  Attempts to push updates may fail if you aren't up to date; that conflict situation adds one more request.  One goal of the interaction is to work fairly efficiently in the face of high latency connections, like mobile.
+
+
+Why No Random Access?
+---------------------
+
+With The Cut-Out you get a stream of updates.  If you are interested in one particular item (and presumably you know enough to know the id of the object), you can't request just that item.  You have to get *everything* and wait for that item to appear.
+
+The issue, however: how do you know the name of that item?  You must have other data that points to that item you now care about.  Why do you have the pointer and not the object itself?
+
+Instead of giving you pointers, The Cut-Out prefers to give you the data itself.  It also gives you that data in one request, so where with another system you'd be handed data allowing you to lazily fetch items, it gives you one (perhaps really big) chunk of data to restore everything.  I believe this programming model is much simpler, and in a lot of situations once you've committed to this it gives you a faster system to work with.
+
+There is a way of storing data with an object, where the data must be explicitly fetched (or linked to) using blobs/``href``.
+
+
+Why Flat Files?
+---------------
+
+The Cut-Out invents its own file format for storing data, and does not use a second level of client-server for data storage (the client is the browser, the server is the node that holds the file).
+
+This was very much informed by watching development of `Firefox Sync <https://account.services.mozilla.com/>`_, which has dealt with a lot of issues around using different backends.  Each of these backends has its own expectations and complexities.
+
+In the interest of the fewest surprises, The Cut-Out implements its own persistence layer, which is developed alongside the server, client, and protocol.
+
+
+Why No Data Model?
+------------------
+
+Many similar systems include a data model, so that they can notify a larger system about changes coming from upstream, and detect changes that must be sent to the server.  In most cases data still persists in the client, at least to some degree, as it allows everything to be more responsive and more resilient when there are server problems.

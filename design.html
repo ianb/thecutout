@@ -4,7 +4,7 @@
     <meta http-equiv="Content-Type"
           content="text/html; charset=utf-8"/>
     
-        <title>The Cut-Out: a no-opinion syncing system for your Javascript/HTML applications &mdash; The Cut-Out</title>
+        <title>Design Rationale &mdash; The Cut-Out</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href='http://fonts.googleapis.com/css?family=Crete+Round' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" href="_static/sphinx-bootstrap.css" type="text/css"/>
@@ -26,7 +26,7 @@
             <script type="text/javascript" src="_static/underscore.js"></script>
             <script type="text/javascript" src="_static/doctools.js"></script>
             <script type="text/javascript" src="_static/bootstrap-dropdown.js"></script>
-        <link rel="top" title="The Cut-Out" href="#"/> 
+        <link rel="top" title="The Cut-Out" href="./"/> 
     <script type="text/javascript" src="https://apis.google.com/js/plusone.js"></script>
     
         <!-- analytics -->
@@ -55,11 +55,11 @@
 
     <div class="related">
         <ul class="nav">
-                <li class=""><a class="brand" href="#">The Cut-Out</a></li>
+                <li class=""><a class="brand" href="./">The Cut-Out</a></li>
                 <li><a href="quickstart.html">Quick Start</a></li>
 <li><a href="library.html">Library Docs</a></li>
 <li><a href="protocol.html">Protocol</a></li>
-<li><a href="design.html">Design Rationale</a></li>
+<li class="active"><a href="design.html">Design Rationale</a></li>
  
         </ul>
     </div>
@@ -120,26 +120,31 @@
         <div class="content row">
                 <div class="span9">
                     
-  <p>A <a class="reference external" href="http://en.wikipedia.org/wiki/Cut-out_(espionage)">&#8220;Cut-Out&#8221;</a>, in espionage terms, is a trusted intermediary who facilitates the exchange of information between agents.</p>
-<p>This project is a server and accompanying client library to provide an intermediary to store and communication information between browser-based applications (e.g., applications that use <tt class="code docutils literal"><span class="pre">localStorage</span></tt> or <tt class="code docutils literal"><span class="pre">IndexedDB</span></tt> as their primary storage).</p>
-<div class="section" id="who-is-this-for">
-<h1>Who is this for?<a class="headerlink" href="#who-is-this-for" title="Permalink to this headline">¶</a></h1>
-<p>Using new browser features like <a class="reference external" href="https://developer.mozilla.org/en-US/docs/IndexedDB">IndexedDB</a> (or somewhat more primitive APIs like <a class="reference external" href="https://developer.mozilla.org/en-US/docs/DOM/Storage">localStorage</a>) you can write sophisticated applications that don&#8217;t rely on a server &#8211; the entire application can be a written in Javascript and HTML with the user&#8217;s persistent data stored in the browser.</p>
-<p><em>But</em> then the data is trapped in the browser, unable to be transferred to other devices or browsers.  No one wants that.  To fix that you&#8217;d have to develop your own persistence mechanism.  The Cut-Out is a general-purpose online persistence mechanism for this kind of situation.  The canonical data storage remains the browser itself, but data is backed up to the cloud, and transferred among devices.</p>
-<p>New environments like <a class="reference external" href="http://www.mozilla.org/en-US/firefoxos/">Firefox OS</a> also encourage applications that use these local storage systems, but as a secondary concern also need to store data in the cloud.</p>
+  <div class="section" id="design-rationale">
+<h1>Design Rationale<a class="headerlink" href="#design-rationale" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="why-not-rest">
+<h2>Why Not REST?<a class="headerlink" href="#why-not-rest" title="Permalink to this headline">¶</a></h2>
+<p>If you look at the <a class="reference external" href="protocol.html">protocol</a> you might notice that it doesn&#8217;t conform to any of the ideas of <a class="reference external" href="http://en.wikipedia.org/wiki/Representational_state_transfer">REST</a>.  It doesn&#8217;t use status codes for much, it only uses hypertext a little (for blobs), and there&#8217;s really just one URL endpoint.</p>
+<p>The protocol is designed with the sync algorithm in mind.  When the client makes a request, the server determines what information it might need, and sends that information.  Using standard HTTP response codes leads to a more chatty protocol, where a request is rejected or a different request is suggested, and then the client has to make that new request.</p>
+<p>The request overhead is one request to authenticate (which only needs to be done occasionally), one request to get or check for any updates, and one request to push any updates.  Attempts to push updates may fail if you aren&#8217;t up to date; that conflict situation adds one more request.  One goal of the interaction is to work fairly efficiently in the face of high latency connections, like mobile.</p>
 </div>
-<div class="section" id="why-is-it-different">
-<h1>Why is it different?<a class="headerlink" href="#why-is-it-different" title="Permalink to this headline">¶</a></h1>
-<p>There are several general-purpose systems like this, such as <a class="reference external" href="https://parse.com/">Parse</a> and <a class="reference external" href="https://www.firebase.com/">Firebase</a>, or open source products like <a class="reference external" href="http://pouchdb.com/">PouchDB</a>.</p>
-<p>Unlike these The Cut-Out is <strong>not opinionated</strong>.  It doesn&#8217;t include a data model.  It doesn&#8217;t care what your objects look like.  It&#8217;s a service you hook up to your persistence system.  All you have to do is provide a few methods, and keep a record of saved, new, dirty, and deleted objects.</p>
-<p>The Cut-Out has also been written to be operationally simple and efficient; i.e., its deployment is simple, it&#8217;s failure cases simple. It is also written with the expectation that a large portion of users will be dormant.  Someone may come along, use an application a few times, then disappear &#8211; while that kind of use uses up a bit of disk space, it doesn&#8217;t effect general scalability.</p>
+<div class="section" id="why-no-random-access">
+<h2>Why No Random Access?<a class="headerlink" href="#why-no-random-access" title="Permalink to this headline">¶</a></h2>
+<p>With The Cut-Out you get a stream of updates.  If you are interested in one particular item (and presumably you know enough to know the id of the object), you can&#8217;t request just that item.  You have to get <em>everything</em> and wait for that item to appear.</p>
+<p>The issue, however: how do you know the name of that item?  You must have other data that points to that item you now care about.  Why do you have the pointer and not the object itself?</p>
+<p>Instead of giving you pointers, The Cut-Out prefers to give you the data itself.  It also gives you that data in one request, so where with another system you&#8217;d be handed data allowing you to lazily fetch items, it gives you one (perhaps really big) chunk of data to restore everything.  I believe this programming model is much simpler, and in a lot of situations once you&#8217;ve committed to this it gives you a faster system to work with.</p>
+<p>There is a way of storing data with an object, where the data must be explicitly fetched (or linked to) using blobs/<tt class="docutils literal"><span class="pre">href</span></tt>.</p>
 </div>
-<div class="section" id="learn-more">
-<h1>Learn More<a class="headerlink" href="#learn-more" title="Permalink to this headline">¶</a></h1>
-<p>See the <a class="reference external" href="quickstart.html">Quick Start</a> for instructions on how to add support to your browser/HTML/Javascript application.</p>
-<p>See the <a class="reference external" href="library.html">Library Docs</a> for more detailed instructions on integrating it.</p>
-<p>If you are interested in the protocol see <a class="reference external" href="protocol.html">the protocol description</a>.</p>
-<p>If you are curious about design decisions see <a class="reference external" href="design.html">the design rationale</a>.</p>
+<div class="section" id="why-flat-files">
+<h2>Why Flat Files?<a class="headerlink" href="#why-flat-files" title="Permalink to this headline">¶</a></h2>
+<p>The Cut-Out invents its own file format for storing data, and does not use a second level of client-server for data storage (the client is the browser, the server is the node that holds the file).</p>
+<p>This was very much informed by watching development of <a class="reference external" href="https://account.services.mozilla.com/">Firefox Sync</a>, which has dealt with a lot of issues around using different backends.  Each of these backends has its own expectations and complexities.</p>
+<p>In the interest of the fewest surprises, The Cut-Out implements its own persistence layer, which is developed alongside the server, client, and protocol.</p>
+</div>
+<div class="section" id="why-no-data-model">
+<h2>Why No Data Model?<a class="headerlink" href="#why-no-data-model" title="Permalink to this headline">¶</a></h2>
+<p>Many similar systems include a data model, so that they can notify a larger system about changes coming from upstream, and detect changes that must be sent to the server.  In most cases data still persists in the client, at least to some degree, as it allows everything to be more responsive and more resilient when there are server problems.</p>
+</div>
 </div>
 
 
@@ -157,14 +162,18 @@
                     <li><a href="quickstart.html">Quick Start</a></li>
 <li><a href="library.html">Library Docs</a></li>
 <li><a href="protocol.html">Protocol</a></li>
-<li><a href="design.html">Design Rationale</a></li>
+
 
                   </ul>
   <!-- <h3>The Cut-Out</h3> -->
   <ul class="nav nav-list">
-<li class="active"><a class="reference internal" href="#">Who is this for?</a></li>
-<li><a class="reference internal" href="#why-is-it-different">Why is it different?</a></li>
-<li><a class="reference internal" href="#learn-more">Learn More</a></li>
+<li class="active"><a class="reference internal" href="#">Design Rationale</a><ul>
+<li><a class="reference internal" href="#why-not-rest">Why Not REST?</a></li>
+<li><a class="reference internal" href="#why-no-random-access">Why No Random Access?</a></li>
+<li><a class="reference internal" href="#why-flat-files">Why Flat Files?</a></li>
+<li><a class="reference internal" href="#why-no-data-model">Why No Data Model?</a></li>
+</ul>
+</li>
 </ul>
 
             </div>
@@ -182,7 +191,7 @@
 
     <!-- disqus -->
     <script type="text/javascript">
-        var disqus_title = 'The Cut-Out: a no-opinion syncing system for your Javascript/HTML applications &mdash; The Cut-Out';
+        var disqus_title = 'Design Rationale &mdash; The Cut-Out';
         var disqus_identifier ='code' + '.' + "thecutout" + window.location.pathname.replace('/', '.');
     </script>
 

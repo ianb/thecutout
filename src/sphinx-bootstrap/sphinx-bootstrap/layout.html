@@ -22,6 +22,9 @@
                         {% if loop.last %}{{ accesskey("U") }}{% endif %}>{{ parent.title }}</a>
                 </li>
             {%- endfor %}
+            {%- if theme_link_list %}
+                {{ theme_make_name_active(pagename) }}
+            {%- endif %}
             {%- block relbaritems %} {% endblock %}
         </ul>
     </div>
@@ -31,6 +34,12 @@
     {%- if render_sidebar %}
         <div class="sphinxsidebar">
             <div class="sphinxsidebarwrapper">
+                {%- if theme_link_list %}
+                  <ul class="nav nav-list">
+                    <li class="nav-header">The Cut-Out Docs</li>
+                    {{ theme_repl_out_name(pagename) }}
+                  </ul>
+                {%- endif %}
                 {%- if sidebars != None %}
                     {#- new style sidebar: explicitly include/exclude templates #}
                     {%- for sidebartemplate in sidebars %}
