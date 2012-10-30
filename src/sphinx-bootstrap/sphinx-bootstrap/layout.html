@@ -93,6 +93,13 @@
     <link href='http://fonts.googleapis.com/css?family=Crete+Round' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" href="{{ pathto('_static/' + style, 1) }}" type="text/css"/>
     <link rel="stylesheet" href="{{ pathto('_static/pygments.css', 1) }}" type="text/css"/>
+    <script>
+      var badPrefix = "http://ianb.github.com/thecutout";
+      if (location.href.search(badPrefix) == 0) {
+        var rest = location.href.substr(badPrefix.length);
+        location.href = "http://thecutout.org" + rest;
+      }
+    </script>
     {%- for cssfile in css_files %}
         <link rel="stylesheet" href="{{ pathto(cssfile, 1) }}" type="text/css"/>
     {%- endfor %}
