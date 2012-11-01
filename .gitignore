@@ -6,7 +6,7 @@ test-dbs
 *-test.xml*
 funkload.log
 funkload.xml
-logdb/tests/test-sync-dbs
-logdb/tests/test_simple-20*
-logdb/tests/tmp-data
+cutout/tests/test-sync-dbs
+cutout/tests/test_simple-20*
+cutout/tests/tmp-data
 data

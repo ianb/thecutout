@@ -1,4 +1,4 @@
-## logdb & sync
+## The Cut-Out & sync
 
 This repo contains a few separate components, all of which work together to implement a system for syncing data from a smart client app (i.e., an application that uses browser-based persistence like [IndexedDB](https://developer.mozilla.org/en-US/docs/IndexedDB)) to a server, and to other instances of that application.
 
@@ -8,17 +8,17 @@ The system has been designed as a unit, with development of the Javascript clien
 
 ### Javascript client
 
-The code for the client is in [syncclient.js](/ianb/logdb/blob/master/logdb/syncclient.js).
+The code for the client is in [syncclient.js](/ianb/thecutout/blob/master/cutout/syncclient.js).
 
 This client handles server interaction and the state of the sync process.  It doesn't touch application persistence directly, instead some glue must be written to handle incoming objects and track objects that have been saved or not.  The library is entirely UI-neutral and model-neutral.
 
 The authentication is handled by [Persona/BrowserID](https://login.persona.org/).
 
-The library is [documented here](https://github.com/ianb/logdb/blob/master/sync.md#library).
+The library is [documented here](https://github.com/ianb/thecutout/blob/master/sync.md#library).
 
 ### HTTP Protocol
 
-The protocol is [described in detail here](https://github.com/ianb/logdb/blob/master/sync.md#protocol).
+The protocol is [described in detail here](https://github.com/ianb/thecutout/blob/master/sync.md#protocol).
 
 Authentication happens by posting to `/verify` with the BrowserID assertion and audience, must as you'd submit a request to the BrowserID verifier.  You get back some information on how to authenticate future requests.
 
@@ -30,7 +30,7 @@ The services is intended to support [Cross-Origin requests](https://developer.mo
 
 ### On-disk representation
 
-The time sequence is stored on disk with the [logdb database](/ianb/logdb/blob/master/logdb/__init__.py)
+The time sequence is stored on disk with the [The Cut-Out database](/ianb/thecutout/blob/master/cutout/__init__.py)
 
 This is a very simple database with just an index file and a file that stores a sequence of blobs.  It only supports searching by the time sequence index - to find a particular object you'd have to scan through the entire file.
 
@@ -38,7 +38,7 @@ There is a separate database file (plus index) for each user and each applicatio
 
 ### Load balancing and replication
 
-A fairly naive balancing and replication system is in [balancer.py](/ianb/logdb/blob/master/logdb/balancer.py).
+A fairly naive balancing and replication system is in [balancer.py](/ianb/thecutout/blob/master/cutout/balancer.py).
 
 This uses [consistent hashing](http://en.wikipedia.org/wiki/Consistent_hashing) to map requests to nodes.  The node is also asked to forward these requests on to one or more backup nodes.
 

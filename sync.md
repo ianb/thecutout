@@ -4,7 +4,7 @@
 
 First, get a server going.  It should work to run `python dev-server.py` - all the prerequesites are included in `vendor/`
 
-This will start the server up at `http://localhost:8088/sync/` - see `-h` for other options.  Note that `selftest-server.py` is for running the logdb tests, so you don't want that one.  You can also use `python dev-server.py my-app/` which will serve up the files in `my-app/` on the root and put logdb in `/sync/`.  If you try to run your app from `file:` URLs it won't work - there are many situations in which the browser doesn't let local files do stuff (like cross-origin requests).
+This will start the server up at `http://localhost:8088/sync/` - see `-h` for other options.  Note that `selftest-server.py` is for running the cutout tests, so you don't want that one.  You can also use `python dev-server.py my-app/` which will serve up the files in `my-app/` on the root and put cutout in `/sync/`.  If you try to run your app from `file:` URLs it won't work - there are many situations in which the browser doesn't let local files do stuff (like cross-origin requests).
 
 Next, include this in your page:
 

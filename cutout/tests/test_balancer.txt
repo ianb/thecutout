@@ -7,8 +7,8 @@ First, we setup some helpers:
 * Create a `make_req` function that sets up a reasonable Request and url
 
     >>> import urlparse
-    >>> from logdb.balancer import Application
-    >>> from logdb.forwarder import rooted
+    >>> from cutout.balancer import Application
+    >>> from cutout.forwarder import rooted
     >>> import os, shutil
     >>> if os.path.exists('./tmp-data'):
     ...     shutil.rmtree('./tmp-data')
